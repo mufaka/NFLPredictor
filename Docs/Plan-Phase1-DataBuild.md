@@ -12,7 +12,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 |-------|-------------|--------|
 | 1 | Environment, Scaffolding, and Raw Data Relocation | Complete |
 | 2 | Normalization Foundations | Complete |
-| 3 | Raw Input Loading and Madden ID Assignment | Not Started |
+| 3 | Raw Input Loading and Madden ID Assignment | Complete |
 | 4 | Tiered Matching Pipeline and Manual Overrides | Not Started |
 | 5 | Unmatched Player Handling and Null-Fill | Not Started |
 | 6 | Output Emission (CSVs and Manifest) | Not Started |
@@ -194,30 +194,31 @@ Read the raw files, validate their schemas, and assign deterministic `madden_id`
 
 ### 3.1 Schema Validation
 
-- [ ] In `src/nflpredictor/databuild/pipeline.py`, define module-level constants `EXPECTED_BOX_SCORES_HEADER: tuple[str, ...]` and `EXPECTED_MADDEN_HEADER: tuple[str, ...]` listing every column name in the order the raw files use. Generate these once from the actual raw headers; commit them as code.
-- [ ] Implement `load_raw_box_scores(path: pathlib.Path) -> pd.DataFrame` that reads the file with `dtype=str` and `keep_default_na=False`, then asserts the header matches `EXPECTED_BOX_SCORES_HEADER` exactly. Raises a `ValueError` with a useful diff on mismatch.
-- [ ] Implement `load_raw_madden(path: pathlib.Path) -> pd.DataFrame` that:
+- [x] In `src/nflpredictor/databuild/pipeline.py`, define module-level constants `EXPECTED_BOX_SCORES_HEADER: tuple[str, ...]` and `EXPECTED_MADDEN_HEADER: tuple[str, ...]` listing every column name in the order the raw files use. Generate these once from the actual raw headers; commit them as code.
+- [x] Implement `load_raw_box_scores(path: pathlib.Path) -> pd.DataFrame` that reads the file with `dtype=str` and `keep_default_na=False`, then asserts the header matches `EXPECTED_BOX_SCORES_HEADER` exactly. Raises a `ValueError` with a useful diff on mismatch.
+- [x] Implement `load_raw_madden(path: pathlib.Path) -> pd.DataFrame` that:
   - Reads with `dtype=str` and `keep_default_na=False`.
   - Strips leading/trailing whitespace from column names on read (`DB-IN-05`).
   - Asserts the post-strip header matches `EXPECTED_MADDEN_HEADER`.
-- [ ] Wire both loaders into a `load_raw_inputs()` function that returns `(box_scores_df, madden_df)`.
+- [x] Wire both loaders into a `load_raw_inputs()` function that returns `(box_scores_df, madden_df)`.
 
 ### 3.2 Madden ID Assignment
 
-- [ ] In `src/nflpredictor/databuild/ids.py`, implement `format_madden_id(vintage: int, sequence: int) -> str` returning `f"{vintage}-{sequence:05d}"`.
-- [ ] Implement `assign_raw_madden_ids(madden_df: pd.DataFrame, vintage: int = 2024) -> pd.DataFrame` that:
+- [x] In `src/nflpredictor/databuild/ids.py`, implement `format_madden_id(vintage: int, sequence: int) -> str` returning `f"{vintage}-{sequence:05d}"`.
+- [x] Implement `assign_raw_madden_ids(madden_df: pd.DataFrame, vintage: int = 2024) -> pd.DataFrame` that:
   - Sorts by `(Team, Position, Full Name, Jersey Number)` ascending (`DB-ID-02`).
   - Inserts a `madden_id` column at position 0 with sequential IDs starting at `2024-00001`.
   - Returns the sorted, ID-augmented DataFrame.
-- [ ] Implement `next_madden_id(last_id: str) -> str` for use when appending unmatched rows in Phase 5.
+- [x] Implement `next_madden_id(last_id: str) -> str` for use when appending unmatched rows in Phase 5.
 
 ### 3.3 Tests
 
-- [ ] `tests/test_ids.py`:
+- [x] `tests/test_ids.py`:
   - Assert `format_madden_id(2024, 1) == "2024-00001"`, `format_madden_id(2024, 12345) == "2024-12345"`.
   - Assert `next_madden_id("2024-00001") == "2024-00002"`.
   - Assert `assign_raw_madden_ids` on a small synthetic 5-row DataFrame produces a stable, expected ID sequence.
   - Assert running `assign_raw_madden_ids` twice on the same DataFrame produces identical output (precursor to determinism phase).
+- [x] `tests/test_pipeline_loaders.py`: header-shape checks, real-file load (272 rows + 2,368 rows), Madden whitespace-stripped headers, schema-mismatch raises, real-file end-to-end ID sweep (`2024-00001` … `2024-02368`).
 
 **Definition of done:** Raw files load without error; schema mismatches raise; ID assignment is deterministic and tested.
 
