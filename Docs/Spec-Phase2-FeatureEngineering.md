@@ -137,12 +137,12 @@ The default `feature_config.yaml` shipped in the repo declares the following. Ed
 |----|-------------|
 | FE-GAME-01 | The build shall derive and emit the game-level columns listed in §3.3 when present in `game_features.include`. |
 | FE-GAME-02 | `week` (numeric): the integer NFL week (1–18). Derived from `GameDate` against the 2024 NFL regular-season calendar; the calendar table shall be versioned as code or a versioned data file. |
-| FE-GAME-03 | `day_of_week` (categorical): one of `Mon`, `Tue`, …, `Sun`. Integer-coded via the vocabulary sidecar. |
-| FE-GAME-04 | `start_hour` (numeric): the local kickoff hour (0–23) extracted from `StartTime`. Minutes are dropped. |
+| FE-GAME-03 | `day_of_week` (categorical): the full English day name as recorded in the box-score `DayOfWeek` column (`Sunday`, `Monday`, …, `Saturday`). Integer-coded via the vocabulary sidecar. Future data sources are expected to provide the same full-name strings. |
+| FE-GAME-04 | `start_hour` (numeric): the stadium-local kickoff hour (0–23) extracted from `StartTime` (e.g., `9:30am` → `9`). Minutes are dropped. Stadium-local means the time at the venue, which is what the source records — a 9:30am London game and a 9:30am Kansas City game both encode as `9`. Future data sources are expected to provide stadium-local times. |
 | FE-GAME-05 | `stadium` (categorical), `roof` (categorical), `surface` (categorical): integer-coded via the vocabulary sidecar from the raw box-score values. |
 | FE-GAME-06 | `home_team_code` and `away_team_code` (categorical): integer-coded via the vocabulary sidecar using the 32 PFR three-letter codes as the closed domain. |
 | FE-GAME-07 | `home_coach` and `away_coach` (categorical): integer-coded via the vocabulary sidecar from the raw box-score values. |
-| FE-GAME-08 | `days_rest_home` and `days_rest_away` (numeric): the number of days between each team's prior game and the current game's `GameDate`, computed across the season. Week-1 games receive a fixed sentinel value of `14` (representing the long offseason gap); the choice is documented in code. |
+| FE-GAME-08 | `days_rest_home` and `days_rest_away` (numeric, `float64`): the number of days between each team's prior in-season game and the current game's `GameDate`, computed across the season. For a team's first game of the season (no prior in-season game), the value shall be NaN (parquet-native null). The model can read NaN as "season opener" and is not forced to impute an arbitrary number; the redundant `week == 1` signal remains available for the same purpose. |
 | FE-GAME-09 | Columns listed in `game_features.include` but not present in any §3.4 requirement shall cause the build to fail fast with a clear error. |
 | FE-GAME-10 | Game-level columns appear once per row in both the B-flat and B-pos parquets, with identical values across the two files. |
 
@@ -151,7 +151,7 @@ The default `feature_config.yaml` shipped in the repo declares the following. Ed
 | ID | Requirement |
 |----|-------------|
 | FE-WX-01 | When `game_features.weather` is `parsed`, the build shall emit four columns: `weather_temp_f` (numeric), `weather_humidity_pct` (numeric), `weather_wind_mph` (numeric), `weather_is_indoor` (numeric 0/1). |
-| FE-WX-02 | The build shall parse the box-score `Weather` field with the regex `r"(?P<temp>-?\d+)\s+degrees,\s+relative humidity\s+(?P<humidity>\d+)%,\s+wind\s+(?P<wind>\d+)\s+mph"` (case-insensitive). |
+| FE-WX-02 | The build shall parse the box-score `Weather` field with the regex `r"(?P<temp>-?\d+)\s+degrees,\s+relative humidity\s+(?P<humidity>\d+)%,\s+(?:wind\s+(?P<wind>\d+)\s+mph\|(?P<calm>no wind))"` (case-insensitive). When the `calm` branch matches, `weather_wind_mph` is `0`. Future data sources must produce weather strings in one of these two forms (or empty). |
 | FE-WX-03 | When `Weather` is empty, the build shall emit `weather_temp_f`, `weather_humidity_pct`, `weather_wind_mph` as NaN and set `weather_is_indoor = 1` if `Roof in {dome, retractable roof (closed)}`, else `0`. |
 | FE-WX-04 | When `Weather` is non-empty but does not match the regex, the build shall fail fast and report the offending `GameId` and raw weather string. No silent fallback. |
 | FE-WX-05 | The four weather columns appear in both B-flat and B-pos parquets with identical values. |
@@ -170,7 +170,7 @@ The default `feature_config.yaml` shipped in the repo declares the following. Ed
 |----|-------------|
 | FE-MAD-01 | For each starter slot in each game, the build shall look up the slot's `madden_id` in `madden_2024.csv` and read the values of every column listed in `madden_columns`. |
 | FE-MAD-02 | Columns in `madden_categorical_columns` shall be integer-coded against the vocabulary sidecar (one vocabulary entry per source column, keyed by the original column name). |
-| FE-MAD-03 | Columns not in `madden_categorical_columns` shall be cast to `float64` and passed through. Non-numeric values in numeric pass-through columns shall cause the build to fail fast. |
+| FE-MAD-03 | Columns not in `madden_categorical_columns` shall be cast to `float64` and passed through. Non-numeric values in numeric pass-through columns shall cause the build to fail fast. Madden columns whose source representation is non-numeric (e.g., `Height` as `"6'5"`, `Total Salary` with currency formatting, `Birthdate` as a serialized epoch) must be either declared categorical in `madden_categorical_columns` or pre-transformed to numeric at the source. Future data sources are expected to supply numeric values for any column intended for numeric pass-through. |
 | FE-MAD-04 | The `matched` flag from the Phase 1 Madden file shall be emitted as a per-slot numeric column (`{slot}_matched`) in both B-flat and B-pos. The flag enables the model to discount null-fill noise per `Docs/Idea.md`'s tradeoff analysis. |
 | FE-MAD-05 | When B-pos has no actual player for a canonical slot in a given game (e.g., a `WR4` slot in a 3-WR formation), all per-slot columns for that slot shall be set to NaN (numeric) or `-1` (integer-coded categorical), and an associated `{slot}_present` column (numeric 0/1) shall be set to `0`. When the slot is filled, `{slot}_present` is `1`. |
 
@@ -178,8 +178,8 @@ The default `feature_config.yaml` shipped in the repo declares the following. Ed
 
 | ID | Requirement |
 |----|-------------|
-| FE-FLAT-01 | The B-flat parquet shall include one column per `(slot, madden_column)` pair, where `slot` ranges over the 44 box-score slot identifiers `{HomeOff01..HomeOff11, HomeDef01..HomeDef11, AwayOff01..AwayOff11, AwayDef01..AwayDef11}` and `madden_column` ranges over the resolved Madden columns plus the synthetic `matched` flag. |
-| FE-FLAT-02 | B-flat column names shall follow the pattern `{slot}_madden_{column_snake_case}`. `column_snake_case` is the source Madden column name lowercased and with spaces replaced by underscores (e.g., `Overall Rating` → `overall_rating`). |
+| FE-FLAT-01 | The B-flat parquet shall include one column per `(slot, madden_column)` pair, where `slot` ranges over the 44 box-score slot identifiers `{HomeOff01..HomeOff11, HomeDef01..HomeDef11, AwayOff01..AwayOff11, AwayDef01..AwayDef11}` and `madden_column` ranges over the resolved Madden columns from `madden_columns`. The per-slot `matched` flag is a separate column per FE-MAD-04 and is not part of the `(slot, madden_column)` cross. |
+| FE-FLAT-02 | B-flat Madden-derived column names shall follow the pattern `{slot}_madden_{column_snake_case}`. `column_snake_case` is the source Madden column name lowercased and with spaces replaced by underscores (e.g., `Overall Rating` → `overall_rating`). The per-slot `matched` flag is named `{slot}_matched` (no `_madden_` infix) so the flag's identity is unambiguous regardless of what's in `madden_columns`. |
 | FE-FLAT-03 | The 44 box-score slot positions (the `{slot}_Position` field) shall be emitted as 44 additional integer-coded categorical columns (`{slot}_position`) so the model can see what role each slot played in the game. These columns share a single vocabulary entry keyed `positions`. |
 | FE-FLAT-04 | B-flat is unaffected by the canonical position taxonomy used by B-pos. Slot 01 is always slot 01 regardless of who played. |
 
@@ -188,7 +188,7 @@ The default `feature_config.yaml` shipped in the repo declares the following. Ed
 | ID | Requirement |
 |----|-------------|
 | FE-POS-01 | The B-pos parquet shall use a fixed canonical position taxonomy defined in code (see §4.3): per side (Home/Away), an enumerated list of position-bucket slots with explicit capacities. The taxonomy is version-pinned to `normalization_version`. |
-| FE-POS-02 | For each game, the build shall assign each starter to a canonical slot by: (a) mapping the starter's box-score position to a position bucket via the position-bucket map in §4.3; (b) within the bucket, ordering filled slots by `(Jersey Number ascending, madden_id ascending)` to produce stable `WR1`, `WR2`, … assignments; (c) leaving extra slots beyond the canonical capacity unassigned and emitting a stderr warning naming the `GameId` and bucket. |
+| FE-POS-02 | For each game, the build shall assign each starter to a canonical slot by: (a) mapping the starter's box-score position to a position bucket via the position-bucket map in §4.3; (b) within the bucket, ordering filled slots by the starter's appearance order in the box-score slot sequence (i.e., walk `{side}Off01..11` then `{side}Def01..11` and assign within-bucket indices 1, 2, … in the order players are encountered) to produce stable `WR1`, `WR2`, … assignments; (c) leaving extra slots beyond the canonical capacity unassigned and emitting a stderr warning naming the `GameId` and bucket. Box-score slot order is preferred over Madden-derived attributes like `Jersey Number` because the latter is null-filled with the column mean for unmatched players (Phase 1 behavior) and would produce nonsense tiebreakers. |
 | FE-POS-03 | If a starter's box-score position is not in the position-bucket map (§4.3), the build shall fail fast with a clear error naming the `GameId`, slot, and unmapped position label. New labels require a code change and a `normalization_version` bump. |
 | FE-POS-04 | B-pos column names shall follow the pattern `{side}{bucket}{index}_madden_{column_snake_case}` for the Madden columns (e.g., `HomeWR1_madden_overall_rating`), `{side}{bucket}{index}_present` for the present flag, and `{side}{bucket}{index}_matched` for the matched flag. |
 
@@ -218,10 +218,11 @@ The default `feature_config.yaml` shipped in the repo declares the following. Ed
 
 | ID | Requirement |
 |----|-------------|
-| FE-MAN-01 | The build shall emit `Data/processed/feature_manifest.json` containing at minimum the keys: `build_timestamp_utc`, `normalization_version`, `feature_config_sha256`, `phase1_source_sha256` (object: input filename → SHA), `output_sha256` (object: output filename → SHA), `git_commit` (or `null`), `phase1_manifest_git_commit` (the `git_commit` from `build_manifest.json`, or `null`), `column_counts` (object: per-parquet column count and per-section breakdown), `vocab_sizes` (object: vocabulary key → entry count). |
+| FE-MAN-01 | The build shall emit `Data/processed/feature_manifest.json` containing at minimum the keys: `build_timestamp_utc`, `normalization_version`, `feature_config_sha256`, `phase1_source_sha256` (object: input filename → SHA), `output_sha256` (object: output filename → SHA), `git_commit` (or `null`), `phase1_manifest_git_commit` (the `git_commit` from `build_manifest.json`, or `null`), `column_counts` (object keyed by parquet basename; each value is an object with a `total` key plus a per-section breakdown using these section keys: `game_id`, `game_level`, `weather`, `officials`, `slot_madden`, `slot_position` (B-flat only), `slot_present` (B-pos only), `slot_matched`, `labels`), `vocab_sizes` (object: vocabulary key → entry count). |
 | FE-MAN-02 | The manifest's `build_timestamp_utc` shall be in ISO 8601 UTC format. |
 | FE-MAN-03 | The manifest shall be written with sorted keys and stable two-space indentation; byte-identical inputs shall produce byte-identical manifests modulo the timestamp. |
 | FE-MAN-04 | The manifest shall be written **last** — after the parquets and the vocab sidecar — so output SHAs can be computed against the on-disk files. |
+| FE-MAN-05 | `feature_config_sha256` shall be the SHA-256 of the raw `Data/raw/feature_config.yaml` file bytes (not the parsed/normalized form). Comments, key ordering, and whitespace edits do change the hash. This mirrors Phase 1's source-hash discipline and keeps the manifest a faithful record of the exact config file on disk at build time. |
 
 ---
 
@@ -325,7 +326,7 @@ src/nflpredictor/features/
 6. **Encode game-level and weather and officials.** Apply numeric casts and integer codes.
 7. **Resolve starter slots.** For each game, walk the 44 box-score slots; for each, fetch the slot's `madden_id`, look up the Madden row, read the configured Madden columns.
 8. **Assemble B-flat.** One row per game, columns per §3.8 and §3.10.
-9. **Assemble B-pos.** One row per game; group starters into canonical buckets per §4.3; assign within-bucket slot indices by `(Jersey Number asc, madden_id asc)`; fill missing slots per FE-MAD-05.
+9. **Assemble B-pos.** One row per game; group starters into canonical buckets per §4.3; assign within-bucket slot indices in box-score slot order per FE-POS-02; fill missing slots per FE-MAD-05.
 10. **Emit outputs.** Write `features_flat_2024.parquet` (if `flat` in `slot_shapes`), `features_pos_2024.parquet` (if `pos`), `feature_vocab.json`, then `feature_manifest.json` (last).
 
 ### 5.2 Determinism Boundaries
@@ -379,9 +380,9 @@ Not applicable.
 | ID | Requirement |
 |----|-------------|
 | FE-TEST-01 | A unit test shall verify `feature_config.yaml` validation against (a) the default v1 config (must accept); (b) a config with an unknown top-level key (must reject); (c) a config with a `madden_columns` entry that doesn't exist in the Madden header (must reject); (d) an empty `slot_shapes` (must reject). |
-| FE-TEST-02 | A unit test shall verify the weather parser (§3.5) against (a) a typical string (`"67 degrees, relative humidity 53%, wind 8 mph"`); (b) an empty string with `Roof = "dome"` (returns NaN/NaN/NaN/1); (c) an empty string with `Roof = "outdoors"` (returns NaN/NaN/NaN/0); (d) a malformed non-empty string (raises). |
+| FE-TEST-02 | A unit test shall verify the weather parser (§3.5) against (a) a typical string (`"67 degrees, relative humidity 53%, wind 8 mph"`); (b) a calm-day string (`"54 degrees, relative humidity 90%, no wind"` → temp 54, humidity 90, wind 0); (c) an empty string with `Roof = "dome"` (returns NaN/NaN/NaN/1); (d) an empty string with `Roof = "outdoors"` (returns NaN/NaN/NaN/0); (e) a malformed non-empty string (raises). |
 | FE-TEST-03 | A unit test shall verify the position-bucket map (§4.3) against every box-score position label observed in `box_scores_2024.csv`. The test fails if a new unmapped label appears. |
-| FE-TEST-04 | A unit test shall verify the days-of-rest derivation (FE-GAME-08) against a synthetic schedule fixture where the expected days-of-rest for each game are known. |
+| FE-TEST-04 | A unit test shall verify the days-of-rest derivation (FE-GAME-08) against a synthetic schedule fixture where the expected days-of-rest for each game are known, including: (a) a team's first game of the season produces NaN; (b) a normal Sunday-to-Sunday cadence produces `7`; (c) a Thursday-night game following the prior Sunday produces `4`. |
 | FE-TEST-05 | An integration test shall run the full Phase 2 build against a synthetic fixture (2–3 games, ≤8 Madden rows) and assert that the two parquets, the vocabulary, and the manifest match a checked-in expected snapshot. |
 | FE-TEST-06 | A determinism test shall run `run_feature_build` twice in succession against identical Phase 1 outputs and identical `feature_config.yaml` and assert byte-equality of both parquet files, the vocabulary JSON, and the manifest (excluding `build_timestamp_utc`). |
 | FE-TEST-07 | A pinned-identity test shall run the real Phase 2 build and assert: (a) the `home_score` and `away_score` of one chosen game match the raw `HomeScore`/`AwayScore`; (b) `HomeOff01_madden_overall_rating` of the same game equals the `Overall Rating` of that game's Home Off slot 01 player's Madden row, joined by `madden_id`; (c) the same player's B-pos column (whichever canonical slot they fall into) carries the same Overall Rating. |
@@ -409,7 +410,7 @@ The following are explicitly out of scope for Phase 2 v1 and recorded so they ar
 - **B-set (permutation-invariant) presentation**: A Phase 4 rung-4 attention model will likely want a permutation-invariant input. The cleanest add is a third parquet (`features_set_2024.parquet`) carrying 22 home-starter rows × N_cols and 22 away-starter rows × N_cols stacked per game, with a `game_id` foreign key. Specifying this requires committing to attention as the model shape.
 - **Madden column widening**: After the first Phase 4 run, error analysis will indicate which Madden columns to add. Editing `feature_config.yaml` is the supported mechanism. If categorical column additions appear, append them to `madden_categorical_columns`.
 - **Target encoding for high-cardinality categoricals**: Coaches (~64 names), officials (~125 names), stadiums (~30) are large enough that one-hot is wasteful. Target-encoded variants can be produced at training time using the training fold only; the integer codes in the sidecar are the input.
-- **Days-of-rest refinement**: The week-1 sentinel of `14` is a placeholder. A future refinement may use a calendar-based "days since last season's last game" derivation. Such a change requires a `normalization_version` bump.
+- **Days-of-rest refinement**: Season-opener games emit NaN. A future refinement may compute a calendar-based "days since last season's last game" so the column carries a real number for every row. Such a change requires a `normalization_version` bump.
 - **Position-taxonomy refinement**: The 8-bucket taxonomy in §4.3 is intentionally coarse. Splitting `OL` into `T`/`G`/`C` (or `DL` into `DE`/`DT`/`NT`) is a Phase 2 amendment with a `normalization_version` bump.
 - **2025-season feature builds**: Once `box_scores_2025.csv` exists in `Data/processed/`, a `--season 2025` (or equivalent) flag produces `features_*_2025.parquet`. Multi-season support is a minor extension; the spec stays single-season for v1.
 - **Phase 3+ specifications**: Splits, model ladder, evaluation, error analysis, and 2025-test specifications will be drafted in their own documents after Phase 2 is implemented.
