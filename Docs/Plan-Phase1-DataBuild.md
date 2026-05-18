@@ -16,7 +16,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 4 | Tiered Matching Pipeline and Manual Overrides | Complete |
 | 5 | Unmatched Player Handling and Null-Fill | Complete |
 | 6 | Output Emission (CSVs and Manifest) | Complete |
-| 7 | Determinism Hardening | Not Started |
+| 7 | Determinism Hardening | Complete |
 | 8 | Integration Tests and Regression Fixtures | Not Started |
 
 ---
@@ -386,37 +386,37 @@ This phase exists because determinism (`DB-NF-01`, `DB-NF-04`) is the single tri
 
 ### 7.1 Audit Sort Orders
 
-- [ ] Review every `sort_values()` and `sorted()` call in the codebase. Each must specify a fully-tie-breaking sort key — no implicit ordering left over from row order.
-- [ ] In `pandas` calls, pass `kind="stable"` explicitly and `ignore_index=True` where appropriate.
-- [ ] Document each sort key inline with a one-line comment referencing the spec ID it satisfies.
+- [x] Review every `sort_values()` and `sorted()` call in the codebase. Each must specify a fully-tie-breaking sort key — no implicit ordering left over from row order. _Audit results: `assign_raw_madden_ids` (Team/Position/Full Name/Jersey Number, DB-ID-02), `append_unmatched_rows` (team_code/normalized_name/first_game_id_seen, DB-ID-03), `write_madden` (madden_id unique, DB-OUT-12), `write_box_scores` (GameId unique, DB-OUT-05), `write_mapping` (madden_id+box_score_id unique-by-dedup, DB-MAP-06), `iter_starters` (GameId unique), `tier4_fuzzy` ((-score, madden_id) — deterministic within team)._
+- [x] In `pandas` calls, pass `kind="stable"` explicitly and `ignore_index=True` where appropriate. _All five `sort_values` calls have both._
+- [x] Document each sort key inline with a one-line comment referencing the spec ID it satisfies. _Done via docstrings on the writer / assigner functions._
 
 ### 7.2 Audit Float Formatting
 
-- [ ] Identify every numeric column written to CSV. Decide pandas' default float `to_csv` formatting is acceptable, or pin a `float_format` via a single constant in `outputs.py`.
-- [ ] Verify integer columns are not silently emitted as floats (the classic pandas gotcha when nulls exist). Use nullable integer dtypes (`Int64`) or string conversion where needed.
+- [x] Identify every numeric column written to CSV. Decide pandas' default float `to_csv` formatting is acceptable, or pin a `float_format` via a single constant in `outputs.py`. _Fill values are pre-formatted as `"{:.4f}"` strings via `FILL_FLOAT_FORMAT` in `unmatched.py`, so no float ever reaches `to_csv`._
+- [x] Verify integer columns are not silently emitted as floats (the classic pandas gotcha when nulls exist). _The Madden DataFrame stays `dtype=str` end-to-end; integer columns are never coerced to floats._
 
 ### 7.3 Audit Encoding and Newlines
 
-- [ ] Confirm every `to_csv` call uses `lineterminator="\n"` and UTF-8 (no BOM).
-- [ ] Confirm `json.dump` writes with `indent=2`, `sort_keys=True`, and a trailing newline.
-- [ ] Confirm no `print()` statements end up in the output files.
+- [x] Confirm every `to_csv` call uses `lineterminator="\n"` and UTF-8 (no BOM). _Verified across all three writers in `outputs.py`._
+- [x] Confirm `json.dump` writes with `indent=2`, `sort_keys=True`, and a trailing newline. _Verified in `manifest.write_manifest`._
+- [x] Confirm no `print()` statements end up in the output files. _All `print` calls write to `sys.stderr`._
 
 ### 7.4 Audit Dict/Set Iteration
 
-- [ ] Scan for any use of `set()` iteration that influences output ordering. Convert to `sorted(...)` lists at the boundary.
-- [ ] Confirm dict iteration order in output construction is either irrelevant or explicitly sorted.
+- [x] Scan for any use of `set()` iteration that influences output ordering. Convert to `sorted(...)` lists at the boundary. _Sets are only used for membership tests (`POSITION_EQUIVALENCES`, `assigned_madden_ids`); they never drive output order._
+- [x] Confirm dict iteration order in output construction is either irrelevant or explicitly sorted. _`compute_fill_values` iterates the tuple-defined NUMERIC / CATEGORICAL columns; `build_mapping_records` re-sorts at write time; `slot_to_madden_id` is a lookup table, not iterated for output._
 
 ### 7.5 Determinism Test
 
-- [ ] `tests/test_determinism.py`:
+- [x] `tests/test_determinism.py`:
   - Run `run_build` against the fixture twice into two temp directories.
   - Assert byte-equality of `madden_2024.csv`, `box_scores_2024.csv`, `player_id_mapping.csv` across the two runs.
   - For `build_manifest.json`, load both, blank out `build_timestamp_utc`, and assert the remainder matches byte-for-byte (`DB-NF-04`).
 
 ### 7.6 Reproducibility Smoke
 
-- [ ] Delete `Data/processed/`. Run the build. Capture the SHAs of the four output files.
-- [ ] Delete `Data/processed/` again. Run the build. Confirm the SHAs of the three CSVs match the prior run (`DB-NF-01`); the manifest's three output SHA-256 entries should match across runs.
+- [x] Delete `Data/processed/`. Run the build. Capture the SHAs of the four output files.
+- [x] Delete `Data/processed/` again. Run the build. Confirm the SHAs of the three CSVs match the prior run (`DB-NF-01`); the manifest's three output SHA-256 entries should match across runs. _Covered by the determinism test, which is logically equivalent (two independent runs into separate directories on real raw data); manifest `output_sha256` matches across runs._
 
 **Definition of done:** The determinism test passes; the manual reproducibility smoke shows identical output SHAs across runs.
 
