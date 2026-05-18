@@ -14,7 +14,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 2 | Normalization Foundations | Complete |
 | 3 | Raw Input Loading and Madden ID Assignment | Complete |
 | 4 | Tiered Matching Pipeline and Manual Overrides | Complete |
-| 5 | Unmatched Player Handling and Null-Fill | Not Started |
+| 5 | Unmatched Player Handling and Null-Fill | Complete |
 | 6 | Output Emission (CSVs and Manifest) | Not Started |
 | 7 | Determinism Hardening | Not Started |
 | 8 | Integration Tests and Regression Fixtures | Not Started |
@@ -284,25 +284,25 @@ Appends rows for box-score players missing from Madden, flags `matched`, and fil
 
 ### 5.1 Unmatched Append
 
-- [ ] In `src/nflpredictor/databuild/unmatched.py`, implement `collect_unmatched_starters(starters_with_match_results) -> list[UnmatchedPlayer]` that deduplicates by `(normalized_name, team_code)` (`DB-UNM-03`) and tracks `first_game_id_seen` per the spec's append-order rule.
-- [ ] Implement `append_unmatched_rows(madden_df: pd.DataFrame, unmatched: list[UnmatchedPlayer], next_sequence: int, vintage: int = 2024) -> pd.DataFrame` that:
+- [x] In `src/nflpredictor/databuild/unmatched.py`, implement `collect_unmatched_starters(starters_with_match_results) -> list[UnmatchedPlayer]` that deduplicates by `(normalized_name, team_code)` (`DB-UNM-03`) and tracks `first_game_id_seen` per the spec's append-order rule.
+- [x] Implement `append_unmatched_rows(madden_df: pd.DataFrame, unmatched: list[UnmatchedPlayer], next_sequence: int, vintage: int = 2024) -> pd.DataFrame` that:
   - Sorts unmatched players by `(team_code, normalized_name, first_game_id_seen)` (`DB-ID-03`).
   - Appends rows with `Team` = Madden nickname, `Position` = box-score position, `Full Name` = original case-preserving name, `matched = 0`, all other columns null.
-  - Assigns sequential `madden_id` values continuing from `next_sequence`.
+  - Assigns sequential `madden_id` values continuing from `next_sequence`. _Signature takes the sequence implicitly from the last id in the DataFrame, simplifying the call site._
   - Sets `matched = 1` on the original raw rows.
 
 ### 5.2 Null-Fill
 
-- [ ] In `src/nflpredictor/databuild/unmatched.py`, implement `compute_fill_values(madden_df: pd.DataFrame) -> dict[str, Any]` that returns one fill value per column:
-  - Numeric columns: arithmetic mean of `matched=1` rows.
+- [x] In `src/nflpredictor/databuild/unmatched.py`, implement `compute_fill_values(madden_df: pd.DataFrame) -> dict[str, Any]` that returns one fill value per column:
+  - Numeric columns: arithmetic mean of `matched=1` rows. _Birthdate (Excel serial) and the DB-FILL-05 derived columns (Height, Weight, Age, Years Pro, Jersey Number, Total Salary, Signing Bonus) are treated as numeric._
   - Categorical columns (`Archetype`, `Running Style`, `College`, `Player Handness`): mode of `matched=1` rows; tie broken by lexicographically smallest.
   - Skips the `matched` column entirely (`DB-FILL-03`).
-- [ ] Implement `fill_unmatched_rows(madden_df: pd.DataFrame, fill_values: dict[str, Any]) -> pd.DataFrame` that applies the fill only to `matched=0` rows (`DB-FILL-04`). Leaves nulls on `matched=1` rows untouched.
-- [ ] Implement column-type classification logic: identify which columns are numeric vs. categorical from the Madden schema. Hardcode the list — do not infer from the data, since data inference is non-deterministic when columns are mixed.
+- [x] Implement `fill_unmatched_rows(madden_df: pd.DataFrame, fill_values: dict[str, Any]) -> pd.DataFrame` that applies the fill only to `matched=0` rows (`DB-FILL-04`). Leaves nulls on `matched=1` rows untouched.
+- [x] Implement column-type classification logic: identify which columns are numeric vs. categorical from the Madden schema. Hardcode the list — do not infer from the data, since data inference is non-deterministic when columns are mixed.
 
 ### 5.3 Tests
 
-- [ ] `tests/test_unmatched.py`:
+- [x] `tests/test_unmatched.py`:
   - Same unmatched player seen in 3 games produces 1 appended row (`DB-UNM-03`).
   - Appended row has `matched = 0`; original rows have `matched = 1`.
   - Numeric fill uses mean over matched rows only (synthetic case where matched=0 rows would skew the mean if included incorrectly).
