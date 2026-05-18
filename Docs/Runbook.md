@@ -71,25 +71,18 @@ If a CUDA machine reports `cuda available: False`, the wheel doesn't match the d
 
 ---
 
-## 3. Sanity-check the test suite first
+## 3. Quick import smoke check
 
-Before kicking off the build, confirm the imports and unit tests pass:
+`Data/processed/` is **gitignored** (per the README: "build outputs, regenerated, not tracked"), so on a fresh clone only `Data/raw/` exists. A full `pytest -q` at this point fails — most Phase 1/2/3 tests and several Phase 4 tests read from `Data/processed/` and need the builds to have run at least once. Run those tests after §4.
+
+For a quick "the venv is sane" check, just verify every package imports:
 
 ```bash
-pytest -q
+python -c "import nflpredictor.databuild, nflpredictor.features, nflpredictor.splits, nflpredictor.train; print('imports OK')"
+pytest tests/test_train_smoke.py -q
 ```
 
-Expected on a fresh checkout (with `Data/processed/predictions/` still empty):
-
-```
-436 passed, 4 skipped in ~110s
-```
-
-The 4 skipped tests are `tests/test_train_pipeline_run.py` — they activate once Phase 4 has produced real-data predictions.
-
-Two notes on the test suite:
-- The integration + determinism tests for Phase 4 (`test_train_integration.py`, `test_train_determinism.py`) force `device: "cpu"` in their fixture config, so they run identically on CUDA and CPU machines. They should pass on any machine with the same major PyTorch version as the dev machine wheels. If they fail with a byte-mismatch on a different machine, regenerate the fixture once (§7).
-- The full suite takes ~2 minutes because the integration test runs the full 12-combination pipeline against a 36-game synthetic fixture twice (once for byte-equality vs expected, once for determinism vs a second run).
+Expected: `imports OK` and `1 passed`. Anything else here means the venv or `pip install -e .` didn't take.
 
 ---
 
@@ -169,7 +162,23 @@ print('S3: %d folds, test=%d' % (len(s['S3']['folds']), len(s['S3']['test'])))
 
 Expected: `S1: train=179 val=45 test=48`, `S3: 9 folds, test=48`.
 
-### 4.4 Phase 4 — Baseline & Model Ladder
+### 4.4 Run the test suite (pre-Phase-4)
+
+Now that Phases 1–3 have populated `Data/processed/`, run the full suite:
+
+```bash
+pytest -q
+```
+
+Expected on a fresh build: **436 passed, 4 skipped** in ~110s.
+
+The 4 skipped tests are in `tests/test_train_pipeline_run.py` — they activate automatically once Phase 4 has produced predictions (§4.5).
+
+Two notes on the suite:
+- The Phase 4 integration + determinism tests (`test_train_integration.py`, `test_train_determinism.py`) force `device: "cpu"` in their fixture config, so they run identically on CUDA and CPU machines. They should pass on any machine with the same major PyTorch version as the dev machine's wheel. If they fail with byte-mismatch errors, regenerate the fixture once (§7).
+- The suite takes ~2 minutes because the integration test runs the full 12-combination pipeline against a 36-game synthetic fixture twice (once for byte-equality vs expected, once for determinism vs a second run).
+
+### 4.5 Phase 4 — Baseline & Model Ladder
 
 ```bash
 python -m nflpredictor.train
@@ -219,7 +228,7 @@ Expected: `combos in manifest: 12`, `TR-MAN-03 ... OK`.
 
 ## 5. Activate the pinned-identity tests against real data
 
-Once `Data/processed/predictions/` exists, the 4 previously-skipped `test_train_pipeline_run.py` tests activate automatically. Re-run the suite:
+Once `Data/processed/predictions/` exists (from §4.5), the 4 previously-skipped `test_train_pipeline_run.py` tests activate automatically:
 
 ```bash
 pytest tests/test_train_pipeline_run.py -v
@@ -242,7 +251,7 @@ Then re-run the full suite:
 pytest -q
 ```
 
-Expected: `440 passed in ~110s` (4 previously-skipped tests now passing).
+Expected: **440 passed in ~110s** (the 4 previously-skipped tests now pass).
 
 ---
 
