@@ -12,7 +12,7 @@ The project's arc is split into seven phases. Decisions made early in the docume
 4. **Baseline & Model Ladder** — PyTorch-native progression from trivial baselines up to candidate models.
 5. **Evaluation** — score predictions and derive secondary metrics (W/L, spread, total).
 6. **Error Analysis & Iteration** — diagnose where the model misses and decide whether to add Madden columns or change shape.
-7. **2025 Test** — apply the frozen model to held-out 2025 data once it arrives.
+7. **2025 Test (deferred)** — future aspiration if 2025 data becomes available; out of scope for this iteration.
 
 The Data Build phase (Phase 1) is the most worked-out section; later phases are exploratory and intentionally lighter on commitments. Because this is a learning project, the document also surfaces *why* each option exists, so the choice can favor teaching value over pure expedience.
 
@@ -35,16 +35,16 @@ Explicit decisions and constraints already provided. These are treated as fixed 
 - **Manual overrides via versioned file**: A `Data/player_overrides.csv` (or equivalent) is read by the build step and edited by hand for ambiguous cases. It is itself a versioned, audit-friendly artifact.
 - **File layout**: Source files move to `Data/raw/`; build outputs land in `Data/processed/`.
 - **PyTorch-native baseline ladder**: The Overview's linear/RF/GBT ladder is replaced with a PyTorch-native progression (mean predictor → `nn.Linear` → small MLP → larger / attention-over-slots). This is closure on the C-option choice.
-- **Scope of this round**: 2024 data only. The user has a separate application that will produce 2025 data when needed; the build's contract must hold up against it, but no 2025 stress-test is required for v1.
+- **Scope of this round**: 2024 data only. The build's contract is intentionally general so future seasons could be ingested without redesign, but 2025 is not part of training, evaluation, or methodology for this iteration.
 - **Madden source contract**: The current Madden CSV's *provider* may change later, but its *schema* (the 69-column shape) is treated as the canonical input contract for roster-level ratings. Alternative providers will be mapped into this shape rather than the other way around.
 - **Targets**: `home_score` and `away_score` (regression). Win/loss, spread, and total are derived from predicted scores rather than modeled directly.
-- **Splits**: Time-aware. Train on 2024; 2025 is a held-out test season.
+- **Splits**: Time-aware. Train, val, and test all carve out of 2024 — see Phase 3.
 - **Scope**: Single-developer learning project. Reproducibility and clear documentation matter; production infrastructure (registry, serving, monitoring) does not.
 - **Canonical example intent**: Decisions should favor approaches that teach broadly applicable best practices for disparate-data ML, even when a shortcut would work for this specific dataset.
 
 ## Problem Statement
 
-The end-to-end problem: produce, before the 2025 season, a PyTorch model that predicts `home_score` and `away_score` for an NFL game given only information knowable before kickoff. The model is trained on 2024 (272 games), validated within 2024, and held out against 2025 once that data exists.
+The end-to-end problem: produce a PyTorch model that predicts `home_score` and `away_score` for an NFL game given only information knowable before kickoff. The model is trained, validated, and tested against time-disjoint slices of the 2024 season (272 games total — see Phase 3 for the partition). The build contract is general enough that future seasons could be ingested without redesign, but that portability is a design discipline rather than a methodology requirement.
 
 Two raw files describe the same world from different angles and do not share a primary key:
 
@@ -65,9 +65,9 @@ The idea is to settle the build-step's identity policy, file shapes, and the doc
 
 End-to-end:
 
-- Predict `home_score` and `away_score` for 2025 NFL games using a PyTorch model trained on 2024 data, with derived metrics (W/L, spread, total) computed from the score predictions.
-- The model must beat genuinely-dumb baselines (predict the league mean; predict each team's season mean) by a non-trivial margin on the 2024 validation set, or the project re-examines its features rather than its architecture.
-- Establish a clear, reproducible pipeline: raw data → build step → processed data → training run → frozen model → 2025 inference. Each handoff is a documented contract.
+- Predict `home_score` and `away_score` for the held-out test slice of 2024 (Weeks 16–18) using a PyTorch model trained on Weeks 1–12 and tuned against Weeks 13–15, with derived metrics (W/L, spread, total) computed from the score predictions.
+- The model must beat genuinely-dumb baselines (predict the league mean; predict each team's season mean) by a non-trivial margin on the validation slice, or the project re-examines its features rather than its architecture.
+- Establish a clear, reproducible pipeline: raw data → build step → processed data → splits → training run → frozen model → test-slice evaluation. Each handoff is a documented contract.
 - The project reads as a teaching example. Decisions and their reasoning are recorded inline or in `Docs/`.
 
 Phase 1 (Data Build):
@@ -77,16 +77,16 @@ Phase 1 (Data Build):
   - `box_scores_2024.csv` — structurally identical to the raw box-scores file, except every `_ID` column now holds a `madden_id`. No blanks.
   - `player_id_mapping.csv` — audit/troubleshooting artifact: `(box_score_id, madden_id, note)` for every starter the build encountered. Not required by model code.
 - The build step that emits these is deterministic, re-runnable, and reads from `Data/raw/` (which includes the raw sources plus a hand-edited `player_overrides.csv` for ambiguous matches).
-- Define a stable input *contract* (column shape, types, allowed values) that 2025 data — and any future alternate ratings provider — can be coerced into.
+- Define a stable input *contract* (column shape, types, allowed values) that future seasons and alternate ratings providers can be coerced into without redesigning the schema.
 
 ## Non-Goals
 
-- Building a serving or inference pipeline beyond what's needed to score 2025 data once.
+- Building a serving or inference pipeline beyond what's needed to score the held-out test slice of 2024.
 - Scraping or refreshing the box-score or Madden sources. Both files are treated as given inputs for this round.
 - Predicting player-level outcomes (yards, touchdowns, interceptions, etc.). The labels are team scores only.
 - Replacing the Madden source. If the provider changes later, that's a separate effort that maps the new source onto the existing 69-column contract.
 - Modeling betting markets directly (Vegas spreads/totals as inputs). They could be added later as a feature group but are not in scope.
-- In-season retraining or online learning. The model is trained once on 2024 and frozen before any 2025 evaluation.
+- In-season retraining or online learning. The model is trained once on the train slice of 2024 and frozen before evaluation against the val or test slices.
 
 ## Current System Context
 
@@ -249,46 +249,46 @@ Open question: weather is free-text (`"67 degrees, relative humidity 53%, wind 8
 
 ## Phase 3: Splits
 
-> **Status**: Time-aware is settled; S1 vs S3 is the live open question.
+> **Status**: Settled. Boundaries, strategies, and the artifact contract are specified in `Docs/Spec-Phase3-Splits.md`.
 
 ### Why time-aware
 
-The deployment scenario is "trained on 2024, scored against 2025." Validation should measure that gap. Shuffled k-fold answers a different question — within-season interpolation — and overstates deployment performance by removing the temporal gap rather than measuring across it.
+The evaluation contract is: train on the early part of 2024, validate on a middle slice, score the final test slice. All three live within the 2024 season — 2025 is not in scope for this iteration. Shuffled k-fold would answer a different question (within-season interpolation) and would overstate test performance by removing the temporal gap between training and held-out data rather than measuring across it. Validating temporally is the only honest way to know whether the model has learned the signal or memorized the games.
 
 Four reasons time-aware is the right framing for *this* dataset, not just the generic "no leakage" answer:
 
 1. **Games within a season aren't i.i.d.** Week 12 outcomes are conditioned on Weeks 1–11 (injury attrition, coordinator adjustments, midseason trades, coaching turnover). Shuffling lets the model see downstream state.
-2. **Madden ratings are a frozen preseason snapshot.** Their predictive power decays as rosters diverge from it. Shuffling makes the decay symmetric across train and val, so the model never has to model it. Time splits put validation in the staler-Madden regime — which is the regime 2025 will live in too.
+2. **Madden ratings are a frozen preseason snapshot.** Their predictive power decays as rosters diverge from it. Shuffling makes the decay symmetric across train and held-out slices, so the model never has to model it. Time splits put validation and test in the staler-Madden regime — exactly where roster robustness matters most.
 3. **End-of-season is a structural regime change.** Weeks 16–18 over-index on rested starters, eliminated-team experimentation, worse weather, degraded fields. Shuffling smears that regime into training as if it were typical.
-4. **272 games is small enough that shuffling hides per-team leakage.** Each team appears ~17 times; shuffled folds let the model learn each team's identity from the same distribution it's then asked to predict against. Time splits force train and val to differ on *which* games of each team appear — closer to the 2025 case.
+4. **272 games is small enough that shuffling hides per-team leakage.** Each team appears ~17 times; shuffled folds let the model learn each team's identity from the same distribution it's then asked to predict against. Time splits force train, val, and test to draw from different points in each team's season trajectory.
 
 ### Acknowledged bias
 
 Time-aware splits are not free. Naming the biases so error analysis stays honest:
 
-- **Validation is a regime, not a sample.** Weeks 15–18 over-index on rested starters, bad weather, and northern outdoor stadiums. Tuning to validation MAE risks fitting late-season quirks rather than underlying signal.
+- **Validation and test are regimes, not samples.** Weeks 13–18 over-index on rested starters, bad weather, and northern outdoor stadiums. Tuning to validation MAE risks fitting late-season quirks; the test metric we ultimately quote is itself measured against a non-random slice of the season.
 - **Training is also biased.** Early-season is where Madden is freshest, injuries fewest, weather mildest. The model learns from a "clean" slice and is asked to generalize to a harder one; training metrics will systematically beat validation, and that gap is partly distributional, not just generalization error.
-- **The late-season regime appears zero times in training.** Whatever distinguishes Weeks 15–18 — weather-suppressed totals, blowout dynamics, tank jobs — has no training examples; the model can only extrapolate into it.
-- **Small-data carve-out.** Single-fold splits commit ~55 games to validation only. With 272 total games, that's a real cost compared to k-fold reusing every game.
-- **Hyperparameter selection is noisy.** ~55 validation games is small. Close metric deltas between candidate models may be late-season noise, not real signal.
+- **The late-season regime appears zero times in training.** Whatever distinguishes Weeks 13–18 — weather-suppressed totals, blowout dynamics, tank jobs — has no training examples; the model can only extrapolate into it.
+- **Small-data carve-out.** ~33% of games (val + test) are off-limits to training. With 272 games total, training has ~180 — a real cost, but the cost of inflated test metrics from a shuffled split would be larger.
+- **Hyperparameter selection is noisy.** ~45 val games is small; close metric deltas between candidate models may be late-season noise. Expanding-window CV (S3) is the lever for this when it becomes the binding constraint.
 
 ### Why we stick with it anyway
 
-1. **Deployment is itself a temporal generalization problem.** Shuffled validation removes bias by changing the question, not by improving the model. The biases above are biases we'll also face at deployment — better to measure them honestly than to optimize against a metric that doesn't transfer.
-2. **They're diagnosable, not hidden.** Slice analysis (Phase 6) separates "model is wrong" from "model is wrong in the late-season regime specifically." Reading *deltas* across the baseline ladder (Phase 4) is more robust to validation-slice quirks than any single absolute metric.
+1. **The evaluation we care about IS temporal generalization.** The question we're answering is "can the model predict games it didn't see, given a chronological gap from the games it did see." Shuffled validation removes the gap rather than measuring across it — that's a different question entirely.
+2. **The biases are diagnosable, not hidden.** Slice analysis (Phase 6) separates "model is wrong" from "model is wrong in the late-season regime specifically." Reading *deltas* across the baseline ladder (Phase 4) is more robust to validation-slice quirks than any single absolute metric.
 
-### Concrete options for 2024
+### The chosen partition
 
-- **3-S1 (single fold, week-boundary)** — Train Weeks 1–14, validate 15–18. ~80/20.
-- **3-S2 (single fold, calendar-boundary)** — Train before Dec 1 2024, validate after. Practically equivalent to S1 for the NFL schedule.
-- **3-S3 (expanding-window CV)** — Train Weeks 1..k, validate Week k+1, slide k from 6 to 17. Produces 12 validation scores; heavier to run, but each fold's validation slice sits at a different point in the season, which partly mitigates the "validation is a single regime" bias above.
+- **Train**: Weeks 1–12 (~180 games, ~66%).
+- **Val**: Weeks 13–15 (~45 games, ~17%).
+- **Test**: Weeks 16–18 (~44 games, ~17%).
 
-2025 remains the unconditional test set in all three.
+Both strategies ship in v1:
 
-Open questions:
+- **3-S1 (single-fold)** — One fixed partition with the boundaries above.
+- **3-S3 (expanding-window CV)** — Test slice is fixed (Weeks 16–18, identical to S1). Within Weeks 1–15, expanding-window folds rotate: train Weeks 1..k, val Week k+1, for k ∈ {6, …, 14}. Produces 9 folds for stable comparison of close models without disturbing the test slice.
 
-- S1 (cheap) or S3 (robust) for the v1 evaluation loop? S1 is fine while features are stabilizing; S3 earns its cost once we're comparing models on small deltas.
-- Hold out a small slice of 2024 as a final-final fallback in case 2025 data arrives late or has quality issues? Conservative but eats further into training data.
+See `Docs/Spec-Phase3-Splits.md` for the deterministic build that emits `Data/processed/splits_2024.json` from this configuration.
 
 ## Phase 4: Baseline & Model Ladder
 
@@ -353,23 +353,23 @@ The iteration loop:
 3. Hypothesis: "this feature group might help" → add it, retrain, compare.
 4. If no improvement after N tries, stop adding features and call the model frozen.
 
-Open question: how many iteration cycles before declaring the model frozen for the 2025 test? Setting a soft cap (e.g., "5 feature-engineering cycles") prevents endless tinkering.
+Open question: how many iteration cycles before declaring the model frozen for the test-slice evaluation? Setting a soft cap (e.g., "5 feature-engineering cycles") prevents endless tinkering.
 
-## Phase 7: 2025 Test
+## Phase 7: 2025 Test (deferred)
 
-> **Status**: Exploratory; depends on 2025 data shape arriving from the user's other application.
+> **Status**: Out of scope for the current iteration. The evaluation universe is 2024 only — see Phase 3. A future iteration may apply the frozen Phase 4 model to 2025 data if and when that dataset becomes available; nothing below is committed to.
 
-The 2025 step exercises the entire contract:
+Sketch of what a future 2025 evaluation could look like, retained for traceability:
 
-- Receive raw 2025 box-scores file in the same schema as 2024.
-- Run the build with 2025 raw inputs; emit `Data/processed/madden_2024.csv` (still using Madden 24 ratings — see open question below), `Data/processed/box_scores_2025.csv`, and a 2025 mapping file.
+- Receive a raw 2025 box-scores file in the same schema as 2024.
+- Run the build with 2025 raw inputs; emit a 2025 processed Madden file, `Data/processed/box_scores_2025.csv`, and a 2025 mapping file.
 - Apply the frozen model. Compare predicted vs. actual scores game-by-game.
 
-Open questions:
+Future open questions (deferred):
 
-- **Madden vintage**: do we keep using Madden 24 ratings for 2025 games (frozen-input simplicity, but the ratings are stale), or do we ingest Madden 25 ratings and rebuild the player IDs (more realistic, but requires the ID-assignment step to be stable across rebuilds)?
-- **Drift handling**: if a 2025 starter doesn't exist in Madden 24 at all (a rookie drafted in 2025, a trade), the build will create a placeholder row with null ratings filled by averages. This is the `matched=0` case. The model will see "average" for that player. Worth measuring how often it happens and whether it correlates with high error.
-- **Reporting**: a small "2025 results" doc with per-week predictions, errors, and a postmortem on the worst calls.
+- **Madden vintage**: keep Madden 24 (frozen-input simplicity, stale ratings) or ingest Madden 25 and rebuild player IDs (more realistic, but requires the ID-assignment step to be stable across rebuilds)?
+- **Drift handling**: a 2025 rookie or trade not in Madden 24 lands in the `matched=0` bucket and sees league-average ratings. Worth measuring frequency and error correlation.
+- **Reporting**: format and home for a "2025 results" writeup.
 
 ## Relevant Considerations
 
@@ -400,7 +400,7 @@ The build step is a single deterministic script that reads `raw/` and emits `pro
 - **Missingness map**: Build it once on the joined table; commit it as a `Docs/DataDictionary.md` companion artifact alongside the training file.
 - **Madden snapshot date**: Madden 24 ratings are a single point-in-time. They can't capture mid-season injuries, trades, or rookie progression. Decide whether the training table notes "Madden snapshot vintage" as a column so a future Madden 25 join doesn't silently break temporal alignment.
 - **Bench depth**: Box scores only enumerate starters. Madden lists rosters. Decide whether the training table needs *any* bench-strength signal (e.g. team-mean Madden rating across the full roster) on top of the per-starter columns.
-- **2025 readiness**: Whatever shape we land on, the test step requires the same shape from 2025 inputs. The contract — column names, types, allowed values — should be a deliverable in itself.
+- **Future-data portability**: 2025 evaluation is not in scope, but the build contract should remain general enough that future seasons could be ingested without redesigning the schema. The contract — column names, types, allowed values — is a deliverable in itself.
 
 ### Operational Considerations
 
@@ -442,7 +442,7 @@ All twelve Phase-1 open questions have been answered. Recorded here for traceabi
 9. **ID/vintage encoding** — Year-prefixed (`2024-`) IDs encode the Madden vintage in the ID itself; no separate vintage column needed.
 10. **Manual-overrides** — Versioned `player_overrides.csv` (in `Data/raw/`); hand-edited; read by the build.
 11. **File layout** — `Data/raw/` for sources, `Data/processed/` for build outputs.
-12. **2024-only first pass** — Confirmed. 2025 data will come later from a separate application.
+12. **2024-only first pass** — Confirmed. The user has a separate application that may produce 2025 data later; that's a future iteration, out of scope here.
 
 ## Remaining Open Questions
 
@@ -460,10 +460,7 @@ Phase 1 is concrete enough to move to a specification. Later phases have intenti
 - Categorical encoding strategy per field (one-hot vs. embedding vs. target encoding). Reasonable to defer until rung 2 actually runs.
 - Officials: include as features, or excluded?
 
-**Phase 3 (Splits)**:
-
-- S1 (single fold by week boundary) or S3 (expanding-window CV) for the v1 evaluation loop?
-- Hold out a slice of 2024 as a final-final fallback in case 2025 data slips?
+**Phase 3 (Splits)**: Resolved by `Docs/Spec-Phase3-Splits.md` — both S1 and S3 ship in v1; the test slice (Weeks 16–18) is the held-out partition and no separate final-final fallback is reserved.
 
 **Phase 4 (Model Ladder)**:
 
@@ -478,10 +475,12 @@ Phase 1 is concrete enough to move to a specification. Later phases have intenti
 
 - Soft cap on iteration cycles before freezing the model?
 
-**Phase 7 (2025 Test)**:
+**Phase 7 (2025 Test, deferred)**:
+
+These items become live only if a future iteration brings 2025 data into scope. Recorded for traceability:
 
 - Stay on Madden 24 ratings, or ingest Madden 25 when available?
-- Format and home for the 2025 results writeup.
+- Format and home for a "2025 results" writeup.
 
 ## References or Related Artifacts
 
