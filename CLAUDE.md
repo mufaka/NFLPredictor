@@ -56,7 +56,27 @@ Re-running the build on identical inputs produces byte-identical JSON (modulo th
 
 The shipped `splits_config.yaml` is the knob for the split contract — moving week boundaries or toggling between S1/S3 is a YAML edit; a new strategy or change to artifact layout requires a `splits_version` bump.
 
-The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, and the splits module is `src/nflpredictor/splits/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, and `Docs/Spec-Phase3-Splits.md`.
+Phase 4 (Baseline & Model Ladder) is implemented. Run the training build with:
+
+```bash
+source .venv/bin/activate
+python -m nflpredictor.train
+```
+
+The build refuses to run unless every Phase 2 tracked output (`features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`) and Phase 3's `splits_2024.json` on disk match the SHAs recorded in their upstream manifests (TR-IN-05 / TR-IN-06). It reads those outputs plus `Data/raw/training_config.yaml` and emits **12 prediction parquets + a training manifest** into `Data/processed/`:
+
+- `predictions/<rung_id>__<shape>__<strategy>.parquet` × 12 — long-format predictions per `(rung, feature_shape, strategy)` combination. The v1 ladder is rungs 0–3 (mean → team_mean → `nn.Linear` → small MLP); each learned rung trains once per feature shape (`flat`, `pos`); each combination is run for both `S1` (single fold, emits val + test predictions) and `S3` (9 expanding-window folds, emits per-fold val predictions). 12 files total = 2 trivial × 1 shape × 2 strategies + 2 learned × 2 shapes × 2 strategies.
+- `training_manifest.json` — SHA-256 hashes of every Phase 2 / Phase 3 input, the training config, and each output parquet; per-combination val MAE summary (S1: single value; S3: per-fold + mean); resolved `device`, `torch_version`, and (when CUDA) `cuda_device_name` + `cuda_version`. The manifest carries val MAE only — test MAE is never computed by Phase 4 (TR-MAN-03); Phase 5 owns that.
+
+The training build is **device-aware, single-device**: `device: "auto"` (the v1 default) resolves to CUDA when available, else CPU; explicit `"cpu"` / `"cuda"` is honored. Determinism is per-device — re-running on the same machine with the same pinned PyTorch wheel produces byte-identical parquets and manifest (modulo `build_timestamp_utc`); CPU↔CUDA byte equality is not asserted. CPU runs of the full v1 config take ~30–60 minutes on a modern 8-core laptop; CUDA is the routine training path.
+
+The encoder applies a +1 index bump so Phase 2's `NULL_SENTINEL = -1` lands in a reserved null slot at embedding/one-hot index 0 (TR-CAT-07). Categorical encodings: low-card vocab (≤ 8 entries: `roof`, `surface`, `day_of_week`) → one-hot; high-card (`Archetype`, `team_codes`, `coaches`, `officials`, `positions`, `stadium`) → learned `nn.Embedding`, shared per vocab key across all physical columns that point at it.
+
+`tests/test_train_integration.py` and `tests/test_train_determinism.py` enforce the per-device byte-identity contract against a synthetic 36-game fixture (regenerate with `python -m tests.fixtures.train._regenerate`). `tests/test_train_pipeline_run.py` runs against real Phase 2/3 outputs and skips when `Data/processed/predictions/` is empty (the heavy real-data run is expected from the CUDA machine, not from CPU CI).
+
+The shipped `training_config.yaml` is the knob for the ladder — adjusting `rungs`, `shapes`, `strategies`, hyperparameters, embedding dims, or the device is a YAML edit; adding a new rung or output layout change requires a `training_version` bump.
+
+The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, the splits module is `src/nflpredictor/splits/`, and the training module is `src/nflpredictor/train/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, `Docs/Spec-Phase3-Splits.md`, `Docs/Plan-Phase4-BaselineLadder.md`, and `Docs/Spec-Phase4-BaselineLadder.md`.
 
 ## Datasets
 

@@ -10,12 +10,12 @@ This is a single-developer learning project. Phases are sized for one person to 
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Scaffolding, Config, and Upstream Hash Gates | Not Started |
-| 2 | Feature/Split Loading and Categorical Encoder | Not Started |
-| 3 | Trivial Rungs and Prediction Parquet Writers | Not Started |
-| 4 | Learned Rungs and Training Loop | Not Started |
-| 5 | Pipeline Orchestration, Manifest, and Real-Data Smoke Run | Not Started |
-| 6 | Determinism Hardening, Integration Tests, and Documentation | Not Started |
+| 1 | Scaffolding, Config, and Upstream Hash Gates | Complete |
+| 2 | Feature/Split Loading and Categorical Encoder | Complete |
+| 3 | Trivial Rungs and Prediction Parquet Writers | Complete |
+| 4 | Learned Rungs and Training Loop | Complete |
+| 5 | Pipeline Orchestration, Manifest, and Real-Data Smoke Run | Complete |
+| 6 | Determinism Hardening, Integration Tests, and Documentation | Complete (CPU; real-data full run deferred to CUDA machine) |
 
 ---
 

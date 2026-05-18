@@ -1,6 +1,6 @@
 # NFLPredictor
 
-NFL game outcome predictor — a learning project that builds a PyTorch model end-to-end on 2024 NFL data and applies it to 2025 once available. Phase 1 produces a normalized dataset joining 2024 box-score lineups to Madden NFL 24 player ratings; Phase 2 turns that into deterministic feature matrices ready for modeling; Phase 3 partitions the 2024 game universe into the train / val / test slices every downstream modeling phase binds to.
+NFL game outcome predictor — a learning project that builds a PyTorch model end-to-end on 2024 NFL data and applies it to 2025 once available. Phase 1 produces a normalized dataset joining 2024 box-score lineups to Madden NFL 24 player ratings; Phase 2 turns that into deterministic feature matrices ready for modeling; Phase 3 partitions the 2024 game universe into the train / val / test slices every downstream modeling phase binds to; Phase 4 trains the v1 PyTorch baseline ladder (mean → team-mean → `nn.Linear` → small MLP) against those splits and emits per-combination prediction parquets.
 
 ## Setup (first checkout)
 
@@ -65,6 +65,22 @@ Refuses to run unless `features_flat_2024.parquet` on disk matches the SHA recor
 
 `Data/raw/splits_config.yaml` is the knob for the split contract — moving week boundaries or toggling between S1/S3 is a YAML edit; a new strategy or change to artifact layout requires a `splits_version` bump.
 
+### Phase 4 — baseline & model ladder
+
+```bash
+source .venv/bin/activate
+python -m nflpredictor.train
+```
+
+Refuses to run unless every Phase 2 tracked output and `splits_2024.json` on disk match the SHAs recorded in their upstream manifests. Reads those outputs plus `Data/raw/training_config.yaml` and emits **12 prediction parquets + a training manifest** into `Data/processed/`:
+
+- `predictions/<rung_id>__<shape>__<strategy>.parquet` × 12 — long-format predictions per `(rung, feature_shape, strategy)` combination. The v1 ladder is rungs 0–3 (mean → team_mean → `nn.Linear` → small MLP); each learned rung trains once per feature shape (`flat`, `pos`); each combination is run for both `S1` (single fold, val + test predictions) and `S3` (9 expanding-window folds, per-fold val predictions).
+- `training_manifest.json` — provenance: SHA-256 of every Phase 2 / Phase 3 input, the training config, and each output parquet; per-combination val MAE summary; resolved `device`, `torch_version`, and (when CUDA) `cuda_device_name` + `cuda_version`. The manifest carries val MAE only — test MAE is never computed by Phase 4.
+
+The training build is **device-aware, single-device**: `device: "auto"` (the v1 default) resolves to CUDA when available, else CPU. Determinism is per-device — byte-identical re-runs are guaranteed within the same resolved device + pinned PyTorch wheel; CPU↔CUDA byte equality is not asserted. The encoder bumps every categorical index by +1 so Phase 2's `NULL_SENTINEL = -1` lands in a reserved null slot at index 0; low-cardinality categoricals (≤ 8 entries) go through one-hot, high-cardinality through shared `nn.Embedding` lookups.
+
+`Data/raw/training_config.yaml` is the knob — adjusting rungs, shapes, strategies, hyperparameters, embedding dims, or the device is a YAML edit; a new rung or output layout change requires a `training_version` bump.
+
 ## Tests
 
 ```bash
@@ -77,6 +93,7 @@ pytest -q
 - `src/nflpredictor/databuild/` — Phase 1 build pipeline
 - `src/nflpredictor/features/` — Phase 2 feature engineering pipeline
 - `src/nflpredictor/splits/` — Phase 3 split-assignment pipeline
-- `Data/raw/` — checked-in source CSVs, `feature_config.yaml`, and `splits_config.yaml`
+- `src/nflpredictor/train/` — Phase 4 baseline & model ladder
+- `Data/raw/` — checked-in source CSVs and config YAML (one per phase)
 - `Data/processed/` — build outputs (regenerated, not tracked)
-- `Docs/` — project overview, phase plans, specs (Phases 1–3 implementation-complete; Phases 4–7 still exploratory in `Idea.md`)
+- `Docs/` — project overview, phase plans, specs (Phases 1–4 implementation-complete; Phases 5–7 still exploratory in `Idea.md`)

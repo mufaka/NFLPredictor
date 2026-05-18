@@ -1,0 +1,34 @@
+training_version: v1
+seed: 1729
+device: cpu
+rungs:
+- mean
+- team_mean
+- linear
+- mlp
+shapes:
+- flat
+- pos
+strategies:
+- S1
+- S3
+linear:
+  lr: 0.001
+  batch_size: 32
+  max_epochs: 10
+  early_stop_patience: 100
+mlp:
+  lr: 0.001
+  batch_size: 32
+  max_epochs: 10
+  early_stop_patience: 100
+  hidden_dim: 256
+  activation: gelu
+  dropout: 0.1
+embedding_dims:
+  Archetype: 16
+  team_codes: 8
+  coaches: 8
+  officials: 8
+  positions: 8
+  stadium: 8

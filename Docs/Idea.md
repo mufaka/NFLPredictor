@@ -292,7 +292,7 @@ See `Docs/Spec-Phase3-Splits.md` for the deterministic build that emits `Data/pr
 
 ## Phase 4: Baseline & Model Ladder
 
-> **Status**: Direction committed (C2: PyTorch-native ladder); rungs of the ladder are exploratory.
+> **Status**: Implementation complete (2026-05-18). The training build is implemented at `src/nflpredictor/train/` and produces 12 prediction parquets (one per `(rung, feature_shape, strategy)` combination) plus `training_manifest.json` in `Data/processed/` via `python -m nflpredictor.train` (gated on a Phase 2 + Phase 3 source-hash check). Fixture-data run summary (36 games, max_epochs=10): rung 0 mean S1.val_mae≈7.09; rung 1 team_mean S1.val_mae≈6.32; rung 2 linear S1.val_mae≈8.20 (flat) / 6.25 (pos); rung 3 MLP S1.val_mae≈7.37 (flat) / 7.68 (pos). The full real-data run is expected from the CUDA training machine; the dev CPU resolves and runs but takes ~30–60 minutes. **Choices**: rungs 0–3 (rung 4 attention deferred), both `flat` and `pos` per learned rung, single multi-output regressor with MAE loss, both S1 (headline) + S3 (tiebreaker), one-hot for low-card categoricals + learned `nn.Embedding` for high-card with the `vocab_size + 1` NULL slot at index 0, predictions-only outputs (no checkpoints in v1).
 
 Each rung must be evaluated against the same splits and metrics. A rung is only worth keeping if it beats the one below it by a meaningful margin on validation.
 
@@ -462,10 +462,7 @@ Phase 1 is concrete enough to move to a specification. Later phases have intenti
 
 **Phase 3 (Splits)**: Resolved by `Docs/Spec-Phase3-Splits.md` — both S1 and S3 ship in v1; the test slice (Weeks 16–18) is the held-out partition and no separate final-final fallback is reserved.
 
-**Phase 4 (Model Ladder)**:
-
-- Single multi-output regressor vs. two independent regressors?
-- Loss function: MSE, MAE, or Huber?
+**Phase 4 (Model Ladder)**: Resolved by `Docs/Spec-Phase4-BaselineLadder.md` — single multi-output regressor with `nn.L1Loss` (MAE); rungs 0–3 (mean → team_mean → `nn.Linear` → small MLP) ship in v1 with rung 4 (attention) deferred; both `flat` and `pos` shapes trained per learned rung; both `S1` and `S3` strategies consumed; one-hot for low-card categoricals + learned `nn.Embedding` for high-card with a NULL slot at index 0; predictions-only outputs.
 
 **Phase 5 (Evaluation)**:
 
