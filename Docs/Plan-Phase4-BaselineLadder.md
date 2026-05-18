@@ -206,9 +206,9 @@ Loads the upstream artifacts into in-memory structures and implements the model'
 ### 2.3 FeatureEncoder Module
 
 - [ ] In `src/nflpredictor/train/encoders.py`, implement `class FeatureEncoder(nn.Module)`:
-  - `__init__(classification, vocab_sizes, embedding_dims)`: constructs an `nn.ModuleDict` of `nn.Embedding` layers keyed by high-card column name, with `num_embeddings = vocab_sizes[col]` and `embedding_dim = embedding_dims[col]`. Defaults from `nn.Embedding` initialization (`TR-MODEL-05`).
-  - `d_in` property: returns the total flat-vector width = `len(numeric) + sum(vocab_size for col in low_card_categorical) + sum(embedding_dims[col] for col in high_card_categorical)` (`TR-CAT-05`, `TR-CAT-06`).
-  - `forward(numeric: Tensor, low_card_indices: dict[str, Tensor], high_card_indices: dict[str, Tensor]) -> Tensor`: builds one-hot tensors for each low-card column (using `F.one_hot(idx, num_classes=vocab_size).float()`), embeddings for each high-card column, and concatenates in the order: numeric → low-card (sorted by name) → high-card (sorted by name). Returns shape `(batch, d_in)`.
+  - `__init__(classification, vocab_sizes, embedding_dims)`: constructs an `nn.ModuleDict` of `nn.Embedding` layers keyed by **vocab key** (shared across physical columns that point at the same vocab — e.g., `home_team_code` and `away_team_code` both use `team_codes`), with `num_embeddings = vocab_sizes[key] + 1` (the +1 reserves slot 0 for Phase 2's `NULL_SENTINEL = -1`, TR-CAT-07) and `embedding_dim = embedding_dims[key]`. Defaults from `nn.Embedding` initialization (`TR-MODEL-05`).
+  - `d_in` property: returns the total flat-vector width = `len(numeric) + sum((vocab_size + 1) for col in low_card_categorical) + sum(embedding_dim for col in high_card_categorical)` (`TR-CAT-05`, `TR-CAT-06`).
+  - `forward(numeric: Tensor, low_card_indices: dict[str, Tensor], high_card_indices: dict[str, Tensor]) -> Tensor`: bumps every categorical index by `+1` (so `NULL_SENTINEL = -1` lands in the reserved slot 0, TR-CAT-07), then builds one-hot tensors for each low-card column (using `F.one_hot(idx + 1, num_classes=vocab_size + 1).float()`) and embeddings for each high-card column. Concatenates in the order: numeric → low-card (sorted by name) → high-card (sorted by name). Returns shape `(batch, d_in)`.
 - [ ] Add a `prepare_batch(df_rows, classification) -> dict[str, Tensor]` helper that converts a DataFrame slice into the three tensors the encoder expects. Use `torch.float32` for numeric and labels, `torch.long` for categorical indices.
 
 ### 2.4 Tests

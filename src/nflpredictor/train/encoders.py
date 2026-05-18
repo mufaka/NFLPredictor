@@ -32,6 +32,16 @@ GAME_ID_COLUMN: str = "GameId"
 # Cardinality boundary for low-card vs high-card (TR-CAT-01 / TR-CAT-02).
 LOW_CARD_THRESHOLD: int = 8
 
+# Phase 2 emits -1 as a NULL_SENTINEL for legitimately-missing categorical cells
+# (e.g., a roster slot a team doesn't fill — features_pos has empty AwayWR4 for
+# 3-WR sets). The encoder bumps every categorical index by +1 so:
+#   - input  -1  → bumped index 0  → reserved "null" slot
+#   - input   0  → bumped index 1  → vocab entry 0
+#   - input N-1  → bumped index N  → vocab entry N-1
+# Embedding tables and one-hot widths are sized to ``vocab_size + 1`` to fit the
+# extra null slot. The null embedding is a learnable representation of "missing."
+NULL_BUMP: int = 1
+
 
 def column_to_vocab_key(col_name: str, vocab_keys: frozenset[str]) -> Optional[str]:
     """Map a Phase 2 parquet column to a vocab key, or ``None`` if numeric.
@@ -156,9 +166,10 @@ class FeatureEncoder(nn.Module):
         }))
 
         # One embedding per high-card vocab key, shared across all physical columns.
+        # +1 entry for the null slot (NULL_SENTINEL = -1 bumped to 0).
         self.embeddings = nn.ModuleDict({
             key: nn.Embedding(
-                num_embeddings=self._vocab_sizes[key],
+                num_embeddings=self._vocab_sizes[key] + NULL_BUMP,
                 embedding_dim=self._embedding_dims[key],
             )
             for key in self._high_card_vocab_keys
@@ -166,10 +177,16 @@ class FeatureEncoder(nn.Module):
 
     @property
     def d_in(self) -> int:
-        """Total flat-vector width: numeric + one-hots + embeddings (TR-CAT-06)."""
+        """Total flat-vector width: numeric + one-hots (vocab+1) + embeddings (TR-CAT-06).
+
+        Low-card one-hots include the NULL slot, so each contributes
+        ``vocab_size + 1`` columns. High-card embeddings have a fixed output
+        dim regardless of vocab size; the extra null entry only widens the
+        embedding table, not the model's input.
+        """
         width = len(self.classification.numeric)
         for col in self.classification.low_card_categorical:
-            width += self._vocab_sizes[self.classification.column_vocab_key[col]]
+            width += self._vocab_sizes[self.classification.column_vocab_key[col]] + NULL_BUMP
         for col in self.classification.high_card_categorical:
             width += self._embedding_dims[self.classification.column_vocab_key[col]]
         return width
@@ -180,17 +197,21 @@ class FeatureEncoder(nn.Module):
         low_card: Mapping[str, torch.Tensor],
         high_card: Mapping[str, torch.Tensor],
     ) -> torch.Tensor:
-        """Build the ``(B, d_in)`` flat input vector in stable concat order (TR-CAT-05)."""
+        """Build the ``(B, d_in)`` flat input vector in stable concat order (TR-CAT-05).
+
+        Every categorical index is bumped by +1 so the Phase 2 NULL_SENTINEL
+        (-1) maps to the reserved null slot at index 0.
+        """
         parts: list[torch.Tensor] = [numeric.to(torch.float32)]
         # Sorted column order ensures byte-stable d_in layout — matches classify_columns.
         for col in self.classification.low_card_categorical:
             key = self.classification.column_vocab_key[col]
-            size = self._vocab_sizes[key]
-            idx = low_card[col].to(torch.long)
+            size = self._vocab_sizes[key] + NULL_BUMP
+            idx = (low_card[col].to(torch.long) + NULL_BUMP)
             parts.append(F.one_hot(idx, num_classes=size).to(torch.float32))
         for col in self.classification.high_card_categorical:
             key = self.classification.column_vocab_key[col]
-            idx = high_card[col].to(torch.long)
+            idx = (high_card[col].to(torch.long) + NULL_BUMP)
             parts.append(self.embeddings[key](idx))
         return torch.cat(parts, dim=1)
 

@@ -10,6 +10,7 @@ import torch
 
 from nflpredictor.train.encoders import (
     LOW_CARD_THRESHOLD,
+    NULL_BUMP,
     ColumnClassification,
     FeatureEncoder,
     classify_columns,
@@ -114,18 +115,52 @@ def test_classify_sort_order_is_independent_of_input_order() -> None:
 
 
 def test_d_in_arithmetic() -> None:
-    """d_in = numeric_width + sum(low_card_vocab_size) + sum(embedding_dim_per_high_card_col)."""
+    """d_in = numeric_width + sum(low_card_vocab_size + 1) + sum(embedding_dim_per_high_card_col).
+
+    The +1 on each low-card one-hot is the NULL slot (see NULL_BUMP / TR-CAT-07).
+    """
     vocab = _synthetic_vocab()
     cls = classify_columns(_synthetic_feature_columns(), vocab)
     emb_dims = {"stadium": 6, "team_codes": 4}
     enc = FeatureEncoder(cls, vocab, emb_dims)
     expected = (
         2                           # numeric: days_rest_home, week
-        + 4                         # roof one-hot (vocab size 4)
+        + (4 + 1)                   # roof one-hot (vocab size 4 + 1 null)
         + 6                         # stadium embedding (dim 6) × 1 col
         + 4 + 4                     # team_codes embedding (dim 4) × 2 cols
     )
     assert enc.d_in == expected
+
+
+def test_null_sentinel_lookup() -> None:
+    """Phase 2's NULL_SENTINEL (-1) maps to the reserved null slot in both encodings.
+
+    For high-card: the embedding table has vocab_size+1 entries; idx=-1 bumps to 0.
+    For low-card: the one-hot has vocab_size+1 columns; idx=-1 bumps to 0.
+    """
+    vocab = _synthetic_vocab()
+    cls = classify_columns(_synthetic_feature_columns(), vocab)
+    enc = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
+    df = pd.DataFrame({
+        "GameId": ["null1", "null2"],
+        "week": [1, 2],
+        "days_rest_home": [7.0, 7.0],
+        "roof": [-1, 0],            # first row has NULL roof
+        "stadium": [-1, 5],         # first row has NULL stadium
+        "home_team_code": [-1, 1],  # first row has NULL home team
+        "away_team_code": [0, 1],
+        "home_score": [0.0, 0.0],
+        "away_score": [0.0, 0.0],
+    })
+    batch = prepare_batch(df, cls)
+    # Forward must not crash even with -1 indices.
+    out = enc(batch["numeric"], batch["low_card"], batch["high_card"])
+    assert out.shape == (2, enc.d_in)
+    assert torch.isfinite(out).all()
+
+
+def test_null_bump_constant() -> None:
+    assert NULL_BUMP == 1
 
 
 def test_forward_shape() -> None:
