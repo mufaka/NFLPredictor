@@ -249,20 +249,46 @@ Open question: weather is free-text (`"67 degrees, relative humidity 53%, wind 8
 
 ## Phase 3: Splits
 
-> **Status**: Exploratory but constrained by the time-aware rule.
+> **Status**: Time-aware is settled; S1 vs S3 is the live open question.
 
-The Overview already established that random splits leak future information. Concrete options for 2024:
+### Why time-aware
 
-- **3-S1 (single fold, week-boundary)** — Train on Weeks 1–14, validate on Weeks 15–18. Simple, defensible, gives ~80/20 split. The drawback: late-season dynamics (playoff-locked teams resting starters, weather) only appear in validation.
-- **3-S2 (single fold, calendar-boundary)** — Train on games before a date (e.g. Dec 1 2024), validate after. Equivalent in practice for the NFL schedule.
-- **3-S3 (expanding-window cross-validation)** — Train on Weeks 1..k, validate on Week k+1, slide k from 6 to 17. Produces 12 validation scores per experiment. Heavier to run; better signal for small data.
+The deployment scenario is "trained on 2024, scored against 2025." Validation should measure that gap. Shuffled k-fold answers a different question — within-season interpolation — and overstates deployment performance by removing the temporal gap rather than measuring across it.
+
+Four reasons time-aware is the right framing for *this* dataset, not just the generic "no leakage" answer:
+
+1. **Games within a season aren't i.i.d.** Week 12 outcomes are conditioned on Weeks 1–11 (injury attrition, coordinator adjustments, midseason trades, coaching turnover). Shuffling lets the model see downstream state.
+2. **Madden ratings are a frozen preseason snapshot.** Their predictive power decays as rosters diverge from it. Shuffling makes the decay symmetric across train and val, so the model never has to model it. Time splits put validation in the staler-Madden regime — which is the regime 2025 will live in too.
+3. **End-of-season is a structural regime change.** Weeks 16–18 over-index on rested starters, eliminated-team experimentation, worse weather, degraded fields. Shuffling smears that regime into training as if it were typical.
+4. **272 games is small enough that shuffling hides per-team leakage.** Each team appears ~17 times; shuffled folds let the model learn each team's identity from the same distribution it's then asked to predict against. Time splits force train and val to differ on *which* games of each team appear — closer to the 2025 case.
+
+### Acknowledged bias
+
+Time-aware splits are not free. Naming the biases so error analysis stays honest:
+
+- **Validation is a regime, not a sample.** Weeks 15–18 over-index on rested starters, bad weather, and northern outdoor stadiums. Tuning to validation MAE risks fitting late-season quirks rather than underlying signal.
+- **Training is also biased.** Early-season is where Madden is freshest, injuries fewest, weather mildest. The model learns from a "clean" slice and is asked to generalize to a harder one; training metrics will systematically beat validation, and that gap is partly distributional, not just generalization error.
+- **The late-season regime appears zero times in training.** Whatever distinguishes Weeks 15–18 — weather-suppressed totals, blowout dynamics, tank jobs — has no training examples; the model can only extrapolate into it.
+- **Small-data carve-out.** Single-fold splits commit ~55 games to validation only. With 272 total games, that's a real cost compared to k-fold reusing every game.
+- **Hyperparameter selection is noisy.** ~55 validation games is small. Close metric deltas between candidate models may be late-season noise, not real signal.
+
+### Why we stick with it anyway
+
+1. **Deployment is itself a temporal generalization problem.** Shuffled validation removes bias by changing the question, not by improving the model. The biases above are biases we'll also face at deployment — better to measure them honestly than to optimize against a metric that doesn't transfer.
+2. **They're diagnosable, not hidden.** Slice analysis (Phase 6) separates "model is wrong" from "model is wrong in the late-season regime specifically." Reading *deltas* across the baseline ladder (Phase 4) is more robust to validation-slice quirks than any single absolute metric.
+
+### Concrete options for 2024
+
+- **3-S1 (single fold, week-boundary)** — Train Weeks 1–14, validate 15–18. ~80/20.
+- **3-S2 (single fold, calendar-boundary)** — Train before Dec 1 2024, validate after. Practically equivalent to S1 for the NFL schedule.
+- **3-S3 (expanding-window CV)** — Train Weeks 1..k, validate Week k+1, slide k from 6 to 17. Produces 12 validation scores; heavier to run, but each fold's validation slice sits at a different point in the season, which partly mitigates the "validation is a single regime" bias above.
 
 2025 remains the unconditional test set in all three.
 
 Open questions:
 
-- Pick S1 (cheap) or S3 (robust) for the v1 evaluation loop? S1 is fine while features are stabilizing; S3 becomes worth the cost once we're comparing models on small deltas.
-- Do we hold out a small slice of 2024 *also* as a final-final test, in case 2025 data arrives late or has quality issues? Conservative but limits training data further.
+- S1 (cheap) or S3 (robust) for the v1 evaluation loop? S1 is fine while features are stabilizing; S3 earns its cost once we're comparing models on small deltas.
+- Hold out a small slice of 2024 as a final-final fallback in case 2025 data arrives late or has quality issues? Conservative but eats further into training data.
 
 ## Phase 4: Baseline & Model Ladder
 
