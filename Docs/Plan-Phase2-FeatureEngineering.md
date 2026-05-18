@@ -10,8 +10,8 @@ This is a single-developer learning project. Phases are sized for one person to 
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Scaffolding, Dependencies, and Default Config | Not started |
-| 2 | Config Loading and Phase 1 Source-Hash Gate | Not started |
+| 1 | Scaffolding, Dependencies, and Default Config | Complete |
+| 2 | Config Loading and Phase 1 Source-Hash Gate | Complete |
 | 3 | Vocabulary Builder and Integer Coding | Not started |
 | 4 | Game-Level Features, Weather, and Officials | Not started |
 | 5 | Position Taxonomy and Madden Column Resolution | Not started |
@@ -112,26 +112,26 @@ Establishes the package skeleton, declares new runtime dependencies, and ships t
 
 ### 1.1 Dependencies
 
-- [ ] Add `pyarrow` (runtime) and `pyyaml` (runtime) to `pyproject.toml`'s `[project.dependencies]`. Pin `pyarrow` to a specific minor version per `FE-NF-08` (e.g., `pyarrow>=17,<18`); pick the version currently in the venv and lock it.
-- [ ] Re-install the package in editable mode: `pip install -e ".[dev]"`.
-- [ ] Verify imports: `python -c "import pyarrow, yaml"`.
+- [x] Add `pyarrow` (runtime) and `pyyaml` (runtime) to `pyproject.toml`'s `[project.dependencies]`. Pin `pyarrow` to a specific minor version per `FE-NF-08`. _Pinned `pyarrow==24.0.*` (patch versions float, minor/major bump requires explicit upgrade); `pyyaml>=6`._
+- [x] Re-install the package in editable mode: `pip install -e ".[dev]"`.
+- [x] Verify imports: `python -c "import pyarrow, yaml"`. _pyarrow 24.0.0, pyyaml 6.0.3._
 
 ### 1.2 Package Skeleton
 
-- [ ] Create `src/nflpredictor/features/__init__.py` (empty).
-- [ ] Create `src/nflpredictor/features/__main__.py` with a stub `main()` that prints `"feature build not implemented yet"` and exits `0`.
-- [ ] Verify the entry point: `python -m nflpredictor.features` prints the stub message.
-- [ ] Add a smoke test `tests/test_features_smoke.py` that imports `nflpredictor.features` and asserts the import succeeds. Run `pytest` to confirm.
+- [x] Create `src/nflpredictor/features/__init__.py` (empty).
+- [x] Create `src/nflpredictor/features/__main__.py` with a stub `main()` that prints `"feature build not implemented yet"` and exits `0`.
+- [x] Verify the entry point: `python -m nflpredictor.features` prints the stub message.
+- [x] Add a smoke test `tests/test_features_smoke.py` that imports `nflpredictor.features` and asserts the import succeeds. Run `pytest` to confirm.
 
 ### 1.3 Default Feature Config
 
-- [ ] Create `Data/raw/feature_config.yaml` with the v1 contents shown verbatim in §4.1 of the spec.
-- [ ] Confirm the file parses cleanly with `python -c "import yaml; print(yaml.safe_load(open('Data/raw/feature_config.yaml')))"`.
+- [x] Create `Data/raw/feature_config.yaml` with the v1 contents shown verbatim in §4.1 of the spec.
+- [x] Confirm the file parses cleanly with `python -c "import yaml; print(yaml.safe_load(open('Data/raw/feature_config.yaml')))"`.
 
 ### 1.4 Documentation Touch-Up
 
-- [ ] Update `CLAUDE.md`'s "Project status" section to note that Phase 2 implementation has begun and the feature build is invoked via `python -m nflpredictor.features` from an activated venv.
-- [ ] Add a one-line note that `Data/raw/feature_config.yaml` is the knob for expanding the column inventory.
+- [x] Update `CLAUDE.md`'s "Project status" section to note that Phase 2 implementation has begun and the feature build is invoked via `python -m nflpredictor.features` from an activated venv.
+- [x] Add a one-line note that `Data/raw/feature_config.yaml` is the knob for expanding the column inventory.
 
 **Definition of done:** `pytest` passes; `python -m nflpredictor.features` runs the stub successfully; `Data/raw/feature_config.yaml` exists with v1 defaults; dependencies install cleanly.
 
@@ -145,8 +145,8 @@ Loads and validates `feature_config.yaml` and verifies the on-disk Phase 1 outpu
 
 ### 2.1 Config Loader and Validator
 
-- [ ] In `src/nflpredictor/features/config.py`, define a `FeatureConfig` dataclass with fields mirroring the YAML schema: `normalization_version`, `madden_columns`, `madden_categorical_columns`, `game_features` (sub-dataclass with `weather`, `officials`, `include`), `slot_shapes`.
-- [ ] Implement `load_feature_config(path: pathlib.Path) -> FeatureConfig` that:
+- [x] In `src/nflpredictor/features/config.py`, define a `FeatureConfig` dataclass with fields mirroring the YAML schema: `normalization_version`, `madden_columns`, `madden_categorical_columns`, `game_features` (sub-dataclass with `weather`, `officials`, `include`), `slot_shapes`. _Both dataclasses are `frozen=True`; collections use tuples for immutability._
+- [x] Implement `load_feature_config(path: pathlib.Path) -> FeatureConfig` that:
   - Reads via `yaml.safe_load` (per `FE-SEC-04`).
   - Rejects unknown top-level keys (`FE-CFG-01`).
   - Validates `madden_columns` non-empty and every entry a string (`FE-CFG-02`).
@@ -155,31 +155,23 @@ Loads and validates `feature_config.yaml` and verifies the on-disk Phase 1 outpu
   - Validates each entry in `game_features.include` matches a known game-level identifier from §3.4 (raise with a clear error otherwise — `FE-GAME-09`).
   - Validates `slot_shapes` is non-empty and a subset of `{flat, pos}` (`FE-CFG-07`).
   - Validates `normalization_version` is a non-empty string (`FE-CFG-08`).
-- [ ] Implement `validate_madden_columns_exist(config: FeatureConfig, madden_header: list[str]) -> None` that fails fast if any declared Madden column is missing from the Phase 1 Madden header (`FE-CFG-02`). Called from the pipeline after the loader.
+- [x] Implement `validate_madden_columns_exist(config: FeatureConfig, madden_header: list[str]) -> None` that fails fast if any declared Madden column is missing from the Phase 1 Madden header (`FE-CFG-02`). Called from the pipeline after the loader.
 
 ### 2.2 Phase 1 Source-Hash Gate
 
-- [ ] In `src/nflpredictor/features/pipeline.py`, define module-level constants `PHASE1_MADDEN = "madden_2024.csv"`, `PHASE1_BOX_SCORES = "box_scores_2024.csv"`, `PHASE1_MANIFEST = "build_manifest.json"`.
-- [ ] Implement `verify_phase1_outputs(processed_dir: pathlib.Path) -> dict` that:
+- [x] In `src/nflpredictor/features/pipeline.py`, define module-level constants `PHASE1_MADDEN_BASENAME`, `PHASE1_BOX_SCORES_BASENAME`, `PHASE1_MANIFEST_BASENAME`.
+- [x] Implement `verify_phase1_outputs(processed_dir: pathlib.Path) -> dict` that:
   - Loads `build_manifest.json`.
   - Recomputes SHA-256 of `madden_2024.csv` and `box_scores_2024.csv` on disk.
-  - Compares against the manifest's `output_sha256` map.
-  - Raises a `ValueError` naming the divergent file on mismatch (`FE-IN-04`).
+  - Compares against the manifest's `output_sha256` map (keyed by repo-relative paths like `Data/processed/madden_2024.csv`).
+  - Raises `Phase1OutputMismatchError` naming the divergent file on mismatch (`FE-IN-04`).
   - Returns the parsed manifest dict for downstream provenance.
-- [ ] Reuse `compute_sha256` from `src/nflpredictor/databuild/manifest.py` if already exported; otherwise factor it out or duplicate the four-line helper into the features package — do not import from `databuild` if the dependency direction feels wrong.
+- [x] Reuse `compute_sha256` from `src/nflpredictor/databuild/manifest.py` (imported directly — Phase 2 consumes Phase 1's output, so the dependency direction is correct).
 
 ### 2.3 Tests
 
-- [ ] `tests/test_features_config.py` (`FE-TEST-01`):
-  - The shipped v1 config loads cleanly and produces the expected `FeatureConfig`.
-  - A config with an unknown top-level key raises.
-  - A config with a `madden_columns` entry absent from a synthetic Madden header raises.
-  - An empty `slot_shapes` raises.
-  - `weather: invalid_value` raises.
-  - A `game_features.include` entry not in the §3.4 known set raises.
-- [ ] `tests/test_features_pipeline_input.py` (`FE-TEST-08`):
-  - Construct a temp `Data/processed/` with a real Phase 1 manifest and matching CSVs; `verify_phase1_outputs` succeeds.
-  - Hand-edit one byte of `madden_2024.csv`; assert the call raises with a message that names the divergent file.
+- [x] `tests/test_features_config.py` (`FE-TEST-01`): 13 tests covering shipped v1 load, missing file, unknown top-level key, missing top-level key, empty/invalid `slot_shapes`, invalid weather/officials modes, unknown game-level identifier, categorical-not-in-madden, empty `madden_columns`, and both `validate_madden_columns_exist` paths against the real Madden header.
+- [x] `tests/test_features_pipeline_input.py` (`FE-TEST-08`): 5 tests covering happy path against real Phase 1 outputs, tampered Madden, tampered box scores, missing manifest, missing output.
 
 **Definition of done:** Config loading rejects every malformed case enumerated in §3.2; the source-hash gate blocks runs against tampered Phase 1 outputs.
 
