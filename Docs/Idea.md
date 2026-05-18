@@ -201,7 +201,7 @@ C1 (keep tree/linear models as cross-paradigm baselines) was considered but decl
 
 ## Phase 2: Feature Engineering & Model Inputs
 
-> **Status**: Exploratory. The processed files determine what's *available*; this phase decides what the model *actually sees*.
+> **Status**: Implementation complete (2026-05-18). The feature build is implemented at `src/nflpredictor/features/` and produces four artifacts in `Data/processed/` via `python -m nflpredictor.features` (gated on a Phase 1 source-hash check). Real-data run summary: 272 games × 202 columns for B-flat, 272 × 258 for B-pos; 9 vocab keys (Archetype=46, coaches=35, day_of_week=6, officials=121, positions=23, roof=4, stadium=34, surface=6, team_codes=32); ~18 B-pos OL/LB bucket-overflow warnings on real lineups; wall-clock ~1.2s. The sections below are retained for reference so the reasoning behind the chosen direction stays visible. **Choices**: 2A deferred-to-config, 2B both B-flat and B-pos emitted, 2C parsed weather + included officials, 2D integer codes + vocab sidecar.
 
 At training time, the joined view of a single game contains:
 

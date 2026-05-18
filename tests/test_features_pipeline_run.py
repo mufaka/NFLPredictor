@@ -129,15 +129,39 @@ def test_manifest_structure(real_build):
     assert pos_counts["slot_matched"] == 58
 
 
-def test_mahomes_pinned_identity(real_build):
-    """Spot-check: the Chiefs/Ravens opener resolves Mahomes to a 99 overall rating."""
+def test_mahomes_pinned_identity_flat(real_build):
+    """Spot-check: the Chiefs/Ravens opener resolves Mahomes to a 99 overall rating in B-flat."""
     flat = pq.read_table(real_build / FLAT_PARQUET_BASENAME).to_pandas()
     opener = flat[flat["GameId"] == "202409050kan"].iloc[0]
     # Mahomes is HomeOff01; per Madden 24 he's the #1 QB at 99 overall.
     assert opener["HomeOff01_madden_overall_rating"] == 99.0
+    assert opener["HomeOff01_matched"] == 1
     # Scores from the raw box score: KC 27, BAL 20.
     assert opener["home_score"] == 27.0
     assert opener["away_score"] == 20.0
+
+
+def test_mahomes_pinned_identity_pos(real_build):
+    """FE-TEST-07: Mahomes also shows up at HomeQB1 in B-pos with the same Overall Rating."""
+    pos = pq.read_table(real_build / POS_PARQUET_BASENAME).to_pandas()
+    opener = pos[pos["GameId"] == "202409050kan"].iloc[0]
+    # B-pos slot HomeQB1 should carry the same player and rating as B-flat HomeOff01.
+    assert opener["HomeQB1_present"] == 1
+    assert opener["HomeQB1_madden_overall_rating"] == 99.0
+    assert opener["HomeQB1_matched"] == 1
+
+
+def test_vocab_decode_round_trip(real_build):
+    """The integer codes in the parquet round-trip back to the original strings via the vocab."""
+    flat = pq.read_table(real_build / FLAT_PARQUET_BASENAME).to_pandas()
+    vocab = json.loads((real_build / FEATURE_VOCAB_BASENAME).read_text())
+    opener = flat[flat["GameId"] == "202409050kan"].iloc[0]
+    # The Chiefs are the home team; verify the team_codes vocab decodes correctly.
+    home_code = int(opener["home_team_code"])
+    assert vocab["team_codes"][home_code] == "kan"
+    # The opener is a Thursday game.
+    dow_code = int(opener["day_of_week"])
+    assert vocab["day_of_week"][dow_code] == "Thursday"
 
 
 def test_byte_identical_rerun(tmp_path):

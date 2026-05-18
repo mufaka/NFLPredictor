@@ -1,0 +1,9 @@
+{
+  "build_timestamp_utc": "fixture",
+  "git_commit": "fixture-phase1",
+  "normalization_version": "v1",
+  "output_sha256": {
+    "Data/processed/box_scores_2024.csv": "32bd4bf61fe0f66905641d130eddccf7fefe31fc24623ab0eacb03d5484e7356",
+    "Data/processed/madden_2024.csv": "75cda6c0d32591e25cb999b934e5d78d525e2bfc8909beb206015d2088209ae3"
+  }
+}

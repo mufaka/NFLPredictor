@@ -22,14 +22,23 @@ This reads `Data/raw/{box_scores_2024.csv, maddennfl24fullplayerratings.csv, pla
 
 Re-running the build on identical inputs produces byte-identical CSVs (`tests/test_determinism.py` enforces this). Run the test suite with `pytest -q` from the activated venv.
 
-Phase 2 (Feature Engineering) is in progress. The feature build is invoked with:
+Phase 2 (Feature Engineering) is implemented. Run the feature build with:
 
 ```bash
 source .venv/bin/activate
 python -m nflpredictor.features
 ```
 
-It reads Phase 1's processed outputs plus `Data/raw/feature_config.yaml` and will emit `features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`, and `feature_manifest.json` into `Data/processed/`. The shipped `feature_config.yaml` is the knob for expanding the feature inventory — adding Madden columns or toggling weather/officials is a YAML edit, not a code change.
+The build refuses to run unless Phase 1's outputs on disk match the SHAs recorded in `Data/processed/build_manifest.json` (FE-IN-04). It reads Phase 1's processed outputs plus `Data/raw/feature_config.yaml` and emits four files into `Data/processed/`:
+
+- `features_flat_2024.parquet` — slot-indexed feature matrix (272 rows × 202 columns for the v1 default config). One column per `(slot, Madden column)` pair, plus per-slot `_position` codes and `_matched` flags, plus game-level / weather / officials columns and the two regression labels.
+- `features_pos_2024.parquet` — position-indexed feature matrix (272 rows × 258 columns). Same shape contract as B-flat but grouped by canonical position taxonomy (29 home slots + 29 away slots per row).
+- `feature_vocab.json` — sorted integer-code domain for every categorical column. Shared keys: `team_codes`, `coaches`, `officials`, `positions`, plus one key per Madden categorical column (default: `Archetype`) and per per-column game-level categorical (`day_of_week`, `stadium`, `roof`, `surface`).
+- `feature_manifest.json` — SHA-256 hashes of inputs, outputs, and the config; `normalization_version`; per-shape column counts; vocab sizes; git commits.
+
+Re-running the build on identical inputs produces byte-identical parquet, vocab, and manifest (modulo the timestamp). `tests/test_features_integration.py` and `tests/test_features_pipeline_run.py` enforce this. Run the test suite with `pytest -q` from the activated venv.
+
+The shipped `feature_config.yaml` is the knob for expanding the feature inventory — adding Madden columns or toggling weather/officials is a YAML edit, not a code change.
 
 The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/` and the feature module is `src/nflpredictor/features/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, and `Docs/Spec-Phase2-FeatureEngineering.md`.
 

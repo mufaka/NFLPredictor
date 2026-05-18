@@ -1,0 +1,27 @@
+normalization_version: "v1"
+
+madden_columns:
+  - "Overall Rating"
+  - "Archetype"
+
+madden_categorical_columns:
+  - "Archetype"
+
+game_features:
+  weather: parsed              # parsed | skip
+  officials: included          # included | skip
+  include:
+    - week
+    - day_of_week
+    - start_hour
+    - stadium
+    - roof
+    - surface
+    - home_team_code
+    - away_team_code
+    - home_coach
+    - away_coach
+    - days_rest_home
+    - days_rest_away
+
+slot_shapes: [flat, pos]

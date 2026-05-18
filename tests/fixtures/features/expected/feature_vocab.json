@@ -1,0 +1,74 @@
+{
+  "Archetype": [
+    "CB_MantoMan",
+    "CB_Slot",
+    "C_Agile",
+    "C_Power",
+    "DE_PowerRusher",
+    "DT_PowerRusher",
+    "DT_RunStopper",
+    "G_PassProtector",
+    "G_Power",
+    "HB_ElusiveBack",
+    "HB_PowerBack",
+    "MLB_FieldGeneral",
+    "MLB_RunStopper",
+    "OLB_PassCoverage",
+    "OLB_PowerRusher",
+    "OT_PassProtector",
+    "OT_Power",
+    "QB_Improviser",
+    "S_RunSupport",
+    "S_Zone",
+    "TE_VerticalThreat",
+    "WR_DeepThreat",
+    "WR_Playmaker",
+    "WR_Slot"
+  ],
+  "coaches": [
+    "Andy Reid",
+    "John Harbaugh"
+  ],
+  "day_of_week": [
+    "Thursday"
+  ],
+  "officials": [
+    "Jason Ledet",
+    "Jim Quirk",
+    "Jimmy Russell",
+    "Patrick Holt",
+    "Shawn Hochuli",
+    "Terry Killens",
+    "Tim Podraza"
+  ],
+  "positions": [
+    "C",
+    "CB",
+    "DB",
+    "DE",
+    "DT",
+    "G",
+    "LB",
+    "OL",
+    "OLB",
+    "QB",
+    "RB",
+    "S",
+    "T",
+    "TE",
+    "WR"
+  ],
+  "roof": [
+    "outdoors"
+  ],
+  "stadium": [
+    "GEHA Field at Arrowhead Stadium"
+  ],
+  "surface": [
+    "grass"
+  ],
+  "team_codes": [
+    "kan",
+    "rav"
+  ]
+}

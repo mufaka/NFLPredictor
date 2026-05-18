@@ -17,7 +17,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 5 | Position Taxonomy and Madden Column Resolution | Complete |
 | 6 | Shape Assembly — B-flat and B-pos | Complete |
 | 7 | Output Emission and Pipeline Orchestration | Complete |
-| 8 | Determinism Hardening and Integration Tests | Not started |
+| 8 | Determinism Hardening and Integration Tests | Complete |
 
 ---
 
@@ -351,57 +351,44 @@ Locks the feature build against silent drift and shape regressions. This is the 
 
 ### 8.1 Determinism Audit
 
-- [ ] Review every `sort_values()` and `sorted()` call in the features package. Each must specify a fully-tie-breaking key with `kind="stable"` and `ignore_index=True` where applicable.
-- [ ] Verify the `Vocabulary` builder iterates `dict`/`set` only after a `sorted(...)` boundary.
-- [ ] Confirm parquet writes go through `PARQUET_WRITE_OPTIONS` exclusively (no ad-hoc `write_table` calls).
-- [ ] Confirm `json.dump` writes use `sort_keys=True, indent=2` plus a trailing newline.
-- [ ] Confirm no `print()` statements end up in any output file (all logging goes to stderr).
-- [ ] Verify integer-coded categorical columns serialize as `int32` (no silent `float64` coercion when nulls appear — sentinel `-1` keeps them integer).
+- [x] Reviewed every `sort_values()` and `sorted()` call in the features package. The single `sort_values` (`pipeline.py:257`, GameId) specifies `kind="stable"` and `ignore_index=True`. All other ordering is `sorted(...)` over deterministic collections (vocab keys/values, manifest dict items, error-message lists).
+- [x] Vocabulary builder iterates `dict`/`set` only after `sorted(...)` boundaries (`vocab.build_vocabulary`).
+- [x] Parquet writes go through `outputs.write_parquet` exclusively (which applies `PARQUET_WRITE_OPTIONS`). No ad-hoc `write_table` calls anywhere.
+- [x] All JSON sidecars use `json.dump(..., sort_keys=True, indent=2)` plus a trailing newline (`outputs.write_vocab`, `manifest.write_feature_manifest`).
+- [x] All logging goes to `sys.stderr` (`pipeline.py` row/column counts + vocab sizes; `pos.py` overflow warnings). No `print()` to stdout in the features package.
+- [x] Integer-coded categorical columns serialize as `int32` via explicit `pd.array(..., dtype="int32")` calls in `flat.py` / `pos.py` / `pipeline.encode_*`. Numeric columns use explicit `float64`.
 
 ### 8.2 Synthetic Fixture
 
-- [ ] Construct `tests/fixtures/features/tiny_madden_phase1.csv`, `tiny_box_scores_phase1.csv`, and `tiny_build_manifest.json` — a small slice (2–3 games, ≤8 Madden rows) shaped exactly like Phase 1's outputs. Easiest path: slice the real Phase 1 outputs to the chosen games and regenerate the manifest's `output_sha256` entries for the slice.
-- [ ] Construct `tests/fixtures/features/tiny_feature_config.yaml` mirroring the v1 default.
-- [ ] Run the feature build against the fixture once; manually inspect outputs; check them in as `tests/fixtures/features/expected/`.
+- [x] `tests/fixtures/features/raw_phase1/` holds the sliced Phase 1 outputs: `box_scores_2024.csv` (1 game — Chiefs/Ravens opener `202409050kan`), `madden_2024.csv` (44 Madden rows referenced by that game), and a regenerated `build_manifest.json` whose `output_sha256` entries match the sliced CSVs so `verify_phase1_outputs` accepts them.
+- [x] `tests/fixtures/features/raw/feature_config.yaml` mirrors the v1 default.
+- [x] `tests/fixtures/features/expected/` holds the four expected artifacts (parquets + vocab + manifest with timestamp blanked).
+- [x] `tests/fixtures/features/_regenerate.py` regenerates the fixture on demand (`python -m tests.fixtures.features._regenerate`). Doc-string notes the fixture is pyarrow-version-sensitive.
 
 ### 8.3 Integration Test
 
-- [ ] `tests/test_features_integration.py` (`FE-TEST-05`):
-  - Run `run_feature_build` against the synthetic fixture into a temp directory.
-  - Assert the two parquets are byte-identical to the checked-in expected files.
-  - Assert `feature_vocab.json` is byte-identical.
-  - Load `feature_manifest.json`, blank the timestamp, and assert the remaining structure matches the expected snapshot.
+- [x] `tests/test_features_integration.py` (`FE-TEST-05`): 4 byte-equality tests against checked-in expected outputs (flat parquet, pos parquet, vocab, manifest after timestamp/git-commit blank).
 
 ### 8.4 Determinism Test
 
-- [ ] `tests/test_features_determinism.py` (`FE-TEST-06`):
-  - Run `run_feature_build` against identical Phase 1 fixture outputs twice into two temp directories.
-  - Assert byte-equality of both parquets and the vocab JSON.
-  - For `feature_manifest.json`, load both, blank `build_timestamp_utc`, assert the remainder matches.
+- [x] `tests/test_features_integration.py::test_fixture_byte_identical_rerun` (`FE-TEST-06`): two independent runs against identical fixture inputs → byte-identical parquets + vocab + manifest minus timestamp. The companion `test_features_pipeline_run.py::test_byte_identical_rerun` exercises the same property on the real 272-game dataset.
 
 ### 8.5 Pinned Real-Data Identities
 
-- [ ] `tests/test_features_pinned_identities.py` (`FE-TEST-07`):
-  - Run the real Phase 2 build (or load cached outputs).
-  - Pick a specific `GameId` (e.g., the Chiefs/Ravens opener `202409050kan`).
-  - Assert `home_score` and `away_score` in the parquet match `HomeScore`/`AwayScore` from the raw box score.
-  - Assert `HomeOff01_madden_overall_rating` equals the `Overall Rating` of that game's Home Off slot 01 player's Madden row (joined by `madden_id`).
-  - Assert the same player's B-pos column (whichever canonical slot they land in) carries the same `Overall Rating`.
-  - Failures here mean a derivation, vocab, or shape change has shifted a real-world feature — investigate before acquiescing.
+- [x] `tests/test_features_pipeline_run.py` (`FE-TEST-07`): pins Mahomes (HomeOff01 of `202409050kan`) to `Overall Rating=99.0` and `matched=1` in B-flat; pins HomeQB1 in B-pos to the same value; verifies the integer codes round-trip through the vocab (team_codes `kan` and day_of_week `Thursday`).
 
 ### 8.6 Vocabulary Stability
 
-- [ ] `tests/test_features_vocab_stability.py` (rest of `FE-TEST-10`):
-  - Run the build twice; assert the vocab JSON is byte-identical and every entry is lexicographically sorted.
+- [x] Covered by `test_features_pipeline_run.py::test_vocab_keys_match_spec` (every value list is lexicographically sorted) plus the byte-identical-rerun tests above (vocab bytes stable across runs). No separate stability test file needed.
 
 ### 8.7 Performance Sanity Check
 
-- [ ] Run `time python -m nflpredictor.features` once and confirm wall-clock is under 30 seconds on the dev laptop (`FE-NF-03`). If not, profile and address before declaring Phase 8 done.
+- [x] `time python -m nflpredictor.features` against real Phase 1 data: 1.23s wall clock (max RSS ~147 MiB). Comfortably under FE-NF-03's 30-second limit.
 
 ### 8.8 Documentation Updates
 
-- [ ] Update `CLAUDE.md` with a one-paragraph summary of how to invoke the feature build, where its outputs land, and that it requires a clean Phase 1 build first.
-- [ ] Append a short "Phase 2 implementation status: complete" note (with date) to `Docs/Idea.md`'s Phase 2 section, so future readers know the feature build is implemented.
+- [x] `CLAUDE.md`'s Project status section now describes the Phase 2 invocation, the four output artifacts, and the byte-identical-rerun guarantee.
+- [x] `Docs/Idea.md`'s Phase 2 section carries a "Status: Implementation complete (2026-05-18)" header with the real-data run summary and the four design-question outcomes.
 
 **Definition of done:** Every `FE-TEST-*` requirement in the spec has a corresponding passing test; re-running the feature build produces byte-identical outputs; documentation is updated.
 
