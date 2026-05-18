@@ -6,7 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 1 (Data Build) implementation is in progress against [Docs/Plan-Phase1-DataBuild.md](Docs/Plan-Phase1-DataBuild.md). The Python package lives under `src/nflpredictor/` and the build pipeline is invoked with `python -m nflpredictor.databuild` from an activated venv. Raw data has been moved to `Data/raw/`; build outputs land in `Data/processed/` (gitignored).
+Phase 1 (Data Build) is implemented. Run the build with:
+
+```bash
+source .venv/bin/activate
+python -m nflpredictor.databuild
+```
+
+This reads `Data/raw/{box_scores_2024.csv, maddennfl24fullplayerratings.csv, player_overrides.csv}` and emits four files into `Data/processed/`:
+
+- `madden_2024.csv` — Madden roster with `madden_id` (first column) + `matched` (last column); appended unmatched-starter rows have `matched=0` and null-filled ratings.
+- `box_scores_2024.csv` — same shape as raw, but every per-slot `_ID` column now carries a `madden_id` (no blanks).
+- `player_id_mapping.csv` — one row per unique `(box_score_id, madden_id)` pair with the tier note that resolved it.
+- `build_manifest.json` — SHA-256 hashes of inputs and outputs, normalization version, git commit, and per-tier match counts.
+
+Re-running the build on identical inputs produces byte-identical CSVs (`tests/test_determinism.py` enforces this). Run the test suite with `pytest -q` from the activated venv.
+
+The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`. The phase plan and spec are in `Docs/Plan-Phase1-DataBuild.md` and `Docs/Spec-Phase1-DataBuild.md`.
 
 ## Datasets
 

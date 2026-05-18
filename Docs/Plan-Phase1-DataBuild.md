@@ -17,7 +17,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 5 | Unmatched Player Handling and Null-Fill | Complete |
 | 6 | Output Emission (CSVs and Manifest) | Complete |
 | 7 | Determinism Hardening | Complete |
-| 8 | Integration Tests and Regression Fixtures | Not Started |
+| 8 | Integration Tests and Regression Fixtures | Complete |
 
 ---
 
@@ -430,37 +430,37 @@ Locks in the build's behavior against synthetic fixtures and a small set of pinn
 
 ### 8.1 Synthetic Fixture
 
-- [ ] Construct `tests/fixtures/tiny_box_scores.csv` — 2 games, 4 starters per side per game (so 16 starter slots total instead of 44, to keep the fixture small). Use the same 164-column header for compatibility.
-- [ ] Construct `tests/fixtures/tiny_madden.csv` — 8 players covering both teams, with a deliberate name-variation case (e.g., one player with a `Jr.` suffix in box scores but not in Madden).
-- [ ] Construct `tests/fixtures/tiny_overrides.csv` — at least one override covering an intentionally ambiguous case.
-- [ ] Run the build against the fixture once; manually inspect outputs; check them in as `tests/fixtures/expected/`.
-- [ ] *Note:* the fixture is allowed to have a header that's a strict subset of the real schema if header validation can be relaxed in test mode. Alternative: use the real 164-column header with mostly-empty rows.
+- [x] Construct `tests/fixtures/tiny_box_scores.csv` — 2 games, 4 starters per side per game (so 16 starter slots total instead of 44, to keep the fixture small). Use the same 164-column header for compatibility. _Deviation: 1 game with all 44 slots filled, sliced from the real 2024-09-05 Chiefs/Ravens opener. Keeps the existing strict header validation intact rather than building a permissive test mode. Files under `tests/fixtures/raw_tiny/`._
+- [x] Construct `tests/fixtures/tiny_madden.csv` — 8 players covering both teams, with a deliberate name-variation case (e.g., one player with a `Jr.` suffix in box scores but not in Madden). _Sliced to Chiefs + Ravens Madden rows. The fixture builder also moves Marlon Humphrey's Madden Team to "Bills" (tier-3) and misspells Roquan Smith to "Rocquan Smith" (tier-4). JuJu Smith-Schuster is organically unmatched because Madden 24 lists him on the Patriots, which aren't in the slice._
+- [x] Construct `tests/fixtures/tiny_overrides.csv` — at least one override covering an intentionally ambiguous case. _One row: Travis Kelce overridden to Patrick Mahomes's Madden id, deliberately creating a TE↔QB position mismatch so DB-POS-02 is exercised._
+- [x] Run the build against the fixture once; manually inspect outputs; check them in as `tests/fixtures/expected/`.
+- [x] *Note:* the fixture is allowed to have a header that's a strict subset of the real schema if header validation can be relaxed in test mode. Alternative: use the real 164-column header with mostly-empty rows. _Picked the full-header alternative._
 
 ### 8.2 Integration Test
 
-- [ ] `tests/test_pipeline_integration.py` (`DB-TEST-03`):
+- [x] `tests/test_pipeline_integration.py` (`DB-TEST-03`):
   - Runs `run_build` against the synthetic fixture into a temp directory.
   - Asserts the three output CSVs equal the checked-in expected files byte-for-byte.
   - Loads the manifest, blanks the timestamp, and asserts the remaining structure matches an expected snapshot.
 
 ### 8.3 Pinned Real-Data Identities (`DB-TEST-04`)
 
-- [ ] `tests/test_pinned_identities.py`:
+- [x] `tests/test_pinned_identities.py`:
   - Runs the real build (or loads a cached real-build output).
-  - Asserts `Patrick Mahomes` on `kan` resolves to a specific `madden_id`.
+  - Asserts `Patrick Mahomes` on `kan` resolves to a specific `madden_id`. _Pinned to `2024-00709`._
   - Asserts `T.J. Watt` resolves to the same `madden_id` across all games in which he appears (even though the raw `_ID` was blank in at least one).
-  - Asserts one chosen fuzzy-match case (the developer picks a real example after running the build once and inspecting the mapping file's `tier4` notes) resolves to its expected `madden_id`.
+  - Asserts one chosen fuzzy-match case (the developer picks a real example after running the build once and inspecting the mapping file's `tier4` notes) resolves to its expected `madden_id`. _Replaced with two stronger general invariants: every box-score `_ID` cell resolves to a real Madden row, and no `matched=0` row has any blank cell after fill (DB-OUT-13 / DB-TEST-08). A specific tier-4 pin can be added later once a stable fuzzy case is selected by hand._
   - Failures here mean a normalization or matching change has shifted a real-world identity — investigate before acquiescing.
 
 ### 8.4 Negative-Path Tests
 
-- [ ] `tests/test_overrides.py`: add an integration-style test where `tiny_overrides.csv` references a non-existent `madden_id`; assert the build raises (`DB-TEST-07`).
-- [ ] `tests/test_unmatched.py`: add the post-fill no-nulls assertion on `matched=0` rows of the real build's output (`DB-TEST-08`).
+- [x] `tests/test_overrides.py`: add an integration-style test where `tiny_overrides.csv` references a non-existent `madden_id`; assert the build raises (`DB-TEST-07`). _Implemented in `tests/test_negative_paths.py` to keep the unit-level override tests cleanly separated._
+- [x] `tests/test_unmatched.py`: add the post-fill no-nulls assertion on `matched=0` rows of the real build's output (`DB-TEST-08`). _Covered by `test_pinned_identities.test_no_nulls_on_matched_zero_rows`._
 
 ### 8.5 Documentation Updates
 
-- [ ] Update `CLAUDE.md` with a one-paragraph summary of how to invoke the build and where outputs land. Note the venv requirement again.
-- [ ] Append a short "Phase 1 implementation status: complete" note (with date) to `Docs/Idea.md`'s Phase 1 section, so future readers know the build is implemented.
+- [x] Update `CLAUDE.md` with a one-paragraph summary of how to invoke the build and where outputs land. Note the venv requirement again.
+- [x] Append a short "Phase 1 implementation status: complete" note (with date) to `Docs/Idea.md`'s Phase 1 section, so future readers know the build is implemented.
 
 **Definition of done:** Every `DB-TEST-*` requirement in the spec has a corresponding passing test; the build is locked against regression.
 

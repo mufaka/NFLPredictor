@@ -1,0 +1,28 @@
+{
+  "build_timestamp_utc": "<blanked-by-regenerate>",
+  "counts": {
+    "box_score_games": 1,
+    "position_mismatches_logged": 1,
+    "raw_madden_rows": 148,
+    "tier1_matches": 1,
+    "tier2_matches": 33,
+    "tier3_matches": 1,
+    "tier4_matches": 1,
+    "total_madden_rows_processed": 156,
+    "total_starter_slots": 44,
+    "unmatched_appended_rows": 8,
+    "unmatched_players_unique": 8
+  },
+  "git_commit": "35f47363369a82b4b2149ac90ffcc2b989619ca7",
+  "normalization_version": "v1",
+  "output_sha256": {
+    "Data/processed/box_scores_2024.csv": "2cf2d590427c1402ab30164e70f5e7f9dc9a4b407cebbf0479ca237eb603de3c",
+    "Data/processed/madden_2024.csv": "90979efac8a56c313e410bc6bb6af7f39ca322f80ca376974950d62cb824e30e",
+    "Data/processed/player_id_mapping.csv": "79ab45a3dee0ee8a090bc175e7f16daa2830b9b6ebc5612a134fcb519a7ee3c6"
+  },
+  "source_sha256": {
+    "Data/raw/box_scores_2024.csv": "cd9197f48fe420a82c868bda7967dd6612cc7f6e24539c5b3b506c7aee191cb0",
+    "Data/raw/maddennfl24fullplayerratings.csv": "b4efe7eac78cd000fc7be2a0609b044244ecc55981b96ad6217885aa37d53acf",
+    "Data/raw/player_overrides.csv": "dfe3ae51d784fd99027d99d3ab7c70190c87c182df204b2b0cd7c7ff2e3fe0ac"
+  }
+}

@@ -97,7 +97,7 @@ Phase 1 (Data Build):
 
 ## Phase 1: Data Build
 
-> **Status**: Decisions made on all three sub-dimensions. The sections below are retained for reference so the reasoning behind the chosen direction stays visible. **Chosen**: A3-with-A2-bootstrap, B3, C2.
+> **Status**: Implementation complete (2026-05-17). The build is implemented at `src/nflpredictor/databuild/` and produces the four artifacts in `Data/processed/` via `python -m nflpredictor.databuild`. Real-data run summary: 7,863 tier-2, 2,405 tier-3, 90 tier-4 matches; 271 unique unmatched players appended; 534 position mismatches logged across 11,968 starter slots (272 games × 44). The sections below are retained for reference so the reasoning behind the chosen direction stays visible. **Chosen**: A3-with-A2-bootstrap, B3, C2.
 
 Two design dimensions dominate this stage: **(A) how player rows get matched** and **(B) what the unified table looks like physically**. They are largely independent; any A can pair with any B. A third dimension — **(C) how PyTorch reconciles with the Overview's model ladder** — is a Phase 4 decision recorded here for historical reasons.
 
