@@ -13,7 +13,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 1 | Environment, Scaffolding, and Raw Data Relocation | Complete |
 | 2 | Normalization Foundations | Complete |
 | 3 | Raw Input Loading and Madden ID Assignment | Complete |
-| 4 | Tiered Matching Pipeline and Manual Overrides | Not Started |
+| 4 | Tiered Matching Pipeline and Manual Overrides | Complete |
 | 5 | Unmatched Player Handling and Null-Fill | Not Started |
 | 6 | Output Emission (CSVs and Manifest) | Not Started |
 | 7 | Determinism Hardening | Not Started |
@@ -232,37 +232,37 @@ Implements the four-tier matching pipeline. This is the heart of the build's ide
 
 ### 4.1 Override Loading
 
-- [ ] In `src/nflpredictor/databuild/overrides.py`, define an `Override` dataclass with fields `box_score_name`, `box_score_team_code`, `box_score_id` (`Optional[str]`), `madden_id`, `reason`.
-- [ ] Implement `load_overrides(path: pathlib.Path) -> list[Override]` that:
+- [x] In `src/nflpredictor/databuild/overrides.py`, define an `Override` dataclass with fields `box_score_name`, `box_score_team_code`, `box_score_id` (`Optional[str]`), `madden_id`, `reason`.
+- [x] Implement `load_overrides(path: pathlib.Path) -> list[Override]` that:
   - Accepts a header-only stub file (`DB-TEST-06`).
   - Validates the header against `box_score_name,box_score_team_code,box_score_id,madden_id,reason`.
   - Returns an empty list if there are no data rows.
-- [ ] Implement `build_override_index(overrides: list[Override], assigned_madden_ids: set[str]) -> dict[OverrideKey, Override]` that:
+- [x] Implement `build_override_index(overrides: list[Override], assigned_madden_ids: set[str]) -> dict[OverrideKey, Override]` that:
   - Verifies each override's `madden_id` exists in `assigned_madden_ids` (`DB-OVR-04`); raises if not.
   - Builds two index keys per override: by `box_score_id` (if present) and by `(normalized_name, team_code)`.
   - Raises on ambiguous overrides (two overrides matching the same key — `DB-OVR-05`).
 
 ### 4.2 Position Equivalence
 
-- [ ] In `src/nflpredictor/databuild/positions.py`, define `POSITION_EQUIVALENCES: dict[str, set[str]]` mapping coarse box-score positions to acceptable Madden positions (e.g., `"OL"` ↔ `{"T", "G", "C"}`, `"DB"` ↔ `{"CB", "S"}`, `"DL"` ↔ `{"DE", "DT"}`). All other positions match by equality.
-- [ ] Implement `positions_compatible(box_score_position: str, madden_position: str) -> bool`.
+- [x] In `src/nflpredictor/databuild/positions.py`, define `POSITION_EQUIVALENCES: dict[str, set[str]]` mapping coarse box-score positions to acceptable Madden positions (e.g., `"OL"` ↔ `{"T", "G", "C"}`, `"DB"` ↔ `{"CB", "S"}`, `"DL"` ↔ `{"DE", "DT"}`). All other positions match by equality. _Map adapted to the actual box-score (`OL`/`OT`/`OG`/`T`/`G`/`DL`/`DE`/`NT`/`DB`/`S`/`LB`/`OLB`/`RB`) and Madden (`C`/`LT`/`RT`/`LG`/`RG`/`LE`/`RE`/`DT`/`CB`/`FS`/`SS`/`LOLB`/`ROLB`/`MLB`/`HB`/`FB`) vocabularies._
+- [x] Implement `positions_compatible(box_score_position: str, madden_position: str) -> bool`.
 
 ### 4.3 Matching Tiers
 
-- [ ] In `src/nflpredictor/databuild/matching.py`, define a `MatchResult` dataclass with fields `madden_id: Optional[str]`, `tier: int` (1–4 or 0 for unmatched), `note_fragment: str`, `position_mismatch: Optional[tuple[str, str]]`.
-- [ ] Implement `tier1_override(starter, override_index) -> Optional[MatchResult]`. Returns a result with `tier=1` and `note_fragment = f"tier1: manual override ({override.reason or 'no reason'})"`.
-- [ ] Implement `tier2_team_and_name(starter, madden_df_by_team_and_normname) -> Optional[MatchResult]`.
-- [ ] Implement `tier3_name_leaguewide(starter, madden_df_by_normname) -> Optional[MatchResult]` — only matches if exactly one Madden row has the normalized name.
-- [ ] Implement `tier4_fuzzy(starter, madden_df_for_team, threshold=0.85, margin=0.10) -> Optional[MatchResult]` using `rapidfuzz.fuzz.token_set_ratio` (divide by 100 to get 0–1).
-- [ ] Implement `match_starter(starter, indexes, override_index) -> MatchResult` that runs the four tiers in order and returns the first hit, or `tier=0` for unmatched.
+- [x] In `src/nflpredictor/databuild/matching.py`, define a `MatchResult` dataclass with fields `madden_id: Optional[str]`, `tier: int` (1–4 or 0 for unmatched), `note_fragment: str`, `position_mismatch: Optional[tuple[str, str]]`.
+- [x] Implement `tier1_override(starter, override_index) -> Optional[MatchResult]`. Returns a result with `tier=1` and `note_fragment = f"tier1: manual override ({override.reason or 'no reason'})"`.
+- [x] Implement `tier2_team_and_name(starter, madden_df_by_team_and_normname) -> Optional[MatchResult]`.
+- [x] Implement `tier3_name_leaguewide(starter, madden_df_by_normname) -> Optional[MatchResult]` — only matches if exactly one Madden row has the normalized name.
+- [x] Implement `tier4_fuzzy(starter, madden_df_for_team, threshold=0.85, margin=0.10) -> Optional[MatchResult]` using `rapidfuzz.fuzz.token_set_ratio` (divide by 100 to get 0–1).
+- [x] Implement `match_starter(starter, indexes, override_index) -> MatchResult` that runs the four tiers in order and returns the first hit, or `tier=0` for unmatched.
 
 ### 4.4 Tests
 
-- [ ] `tests/test_overrides.py`:
+- [x] `tests/test_overrides.py`:
   - Override with missing `madden_id` reference raises (`DB-OVR-04`).
   - Two overrides targeting the same starter raises (`DB-OVR-05`).
   - Header-only overrides file returns empty list (`DB-TEST-06`).
-- [ ] `tests/test_matching.py`:
+- [x] `tests/test_matching.py`:
   - Tier 1 wins over a possible Tier 2 match.
   - Tier 2 hit on Patrick Mahomes (Chiefs, QB) returns the expected ID against a fixture Madden table.
   - Tier 3 hit on a single-instance league-wide name (simulate a traded player whose Madden team is stale).
@@ -270,6 +270,7 @@ Implements the four-tier matching pipeline. This is the heart of the build's ide
   - Tier 4 hit at score 0.92 with no close runner-up succeeds.
   - Tier 4 fails when the runner-up is within 0.10 of the leader.
   - All-tiers-fail returns `tier=0`.
+- [x] `tests/test_positions.py`: parametrized compatible/incompatible pairs across the equivalence table.
 
 **Definition of done:** Matching tests pass; the four-tier pipeline produces stable results on the synthetic fixture.
 
