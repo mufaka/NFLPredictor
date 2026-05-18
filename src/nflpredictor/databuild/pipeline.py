@@ -1,15 +1,41 @@
-"""Top-level orchestration of the Phase 1 data build.
-
-Phase 3 scope: raw input loaders and the canonical header constants used
-to detect upstream schema drift. Subsequent phases extend this module
-with matching, unmatched handling, and output emission.
-"""
+"""Top-level orchestration of the Phase 1 data build."""
 
 from __future__ import annotations
 
+import collections
 import pathlib
+import sys
+from typing import Iterable, Iterator
 
 import pandas as pd
+
+from .ids import assign_raw_madden_ids
+from .matching import (
+    MaddenRow,
+    MatchIndexes,
+    MatchResult,
+    Starter,
+    build_match_indexes,
+    match_starter,
+)
+from .manifest import build_manifest, write_manifest
+from .normalization import normalize_name
+from .outputs import (
+    build_mapping_records,
+    rewrite_box_score_ids,
+    write_box_scores,
+    write_madden,
+    write_mapping,
+)
+from .overrides import build_override_index, load_overrides
+from .unmatched import (
+    MATCHED_COLUMN,
+    UnmatchedPlayer,
+    append_unmatched_rows,
+    collect_unmatched_starters,
+    compute_fill_values,
+    fill_unmatched_rows,
+)
 
 
 EXPECTED_BOX_SCORES_HEADER: tuple[str, ...] = (
@@ -210,3 +236,197 @@ def load_raw_inputs(
     box_scores = load_raw_box_scores(raw_dir / "box_scores_2024.csv")
     madden = load_raw_madden(raw_dir / "maddennfl24fullplayerratings.csv")
     return box_scores, madden
+
+
+SLOT_PREFIXES: tuple[str, ...] = tuple(
+    f"{side}{nn:02d}"
+    for side in ("HomeOff", "HomeDef", "AwayOff", "AwayDef")
+    for nn in range(1, 12)
+)
+
+
+def iter_starters(box_scores_df: pd.DataFrame) -> Iterator[Starter]:
+    """Yield one :class:`Starter` per per-game per-slot lineup cell.
+
+    Iterates games in GameId-sorted order so the resulting sequence is
+    deterministic and the first-seen game for any unmatched player is
+    chronological (DB-ID-03).
+    """
+    sorted_df = box_scores_df.sort_values("GameId", kind="stable")
+    for _, row in sorted_df.iterrows():
+        game_id = row["GameId"]
+        home_code = row["HomeTeamCode"]
+        away_code = row["AwayTeamCode"]
+        for prefix in SLOT_PREFIXES:
+            team_code = home_code if prefix.startswith("Home") else away_code
+            yield Starter(
+                game_id=game_id,
+                slot_column=prefix,
+                name=row[f"{prefix}_Name"],
+                team_code=team_code,
+                position=row[f"{prefix}_Position"],
+                box_score_id=row[f"{prefix}_ID"],
+            )
+
+
+def _build_madden_rows_from_df(madden_df: pd.DataFrame) -> list[MaddenRow]:
+    """Project an assigned-ID Madden DataFrame down to lightweight match rows."""
+    return [
+        MaddenRow(
+            madden_id=r["madden_id"],
+            team=r["Team"],
+            position=r["Position"],
+            full_name=r["Full Name"],
+            normalized_name=normalize_name(r["Full Name"]),
+        )
+        for _, r in madden_df.iterrows()
+    ]
+
+
+def _resolve_unmatched_ids(
+    pairs: list[tuple[Starter, MatchResult]],
+    assignments: dict[tuple[str, str], str],
+) -> list[tuple[Starter, MatchResult]]:
+    """Fill in ``madden_id`` on tier-0 results using the unmatched assignments."""
+    resolved: list[tuple[Starter, MatchResult]] = []
+    for starter, result in pairs:
+        if result.madden_id is not None:
+            resolved.append((starter, result))
+            continue
+        key = (normalize_name(starter.name), starter.team_code)
+        try:
+            madden_id = assignments[key]
+        except KeyError as exc:
+            raise RuntimeError(
+                f"Unmatched starter {starter.name!r} ({starter.team_code}) "
+                "has no appended row; this indicates a bug in collect_unmatched_starters"
+            ) from exc
+        resolved.append(
+            (
+                starter,
+                MatchResult(
+                    madden_id=madden_id,
+                    tier=result.tier,
+                    note_fragment=result.note_fragment,
+                    position_mismatch=result.position_mismatch,
+                ),
+            )
+        )
+    return resolved
+
+
+def _log_position_mismatch(starter: Starter, result: MatchResult) -> None:
+    if result.position_mismatch is None:
+        return
+    box_pos, madden_pos = result.position_mismatch
+    print(
+        f"WARN position mismatch: game={starter.game_id} slot={starter.slot_column} "
+        f"name={starter.name!r} team={starter.team_code} "
+        f"box={box_pos} madden={madden_pos}",
+        file=sys.stderr,
+    )
+
+
+def _counts(
+    *,
+    raw_madden_rows: int,
+    unmatched_appended_rows: int,
+    box_score_games: int,
+    resolved: list[tuple[Starter, MatchResult]],
+) -> dict[str, int]:
+    tier_counter: collections.Counter[int] = collections.Counter()
+    position_mismatches = 0
+    for _, result in resolved:
+        tier_counter[result.tier] += 1
+        if result.position_mismatch is not None:
+            position_mismatches += 1
+    return {
+        "raw_madden_rows": raw_madden_rows,
+        "unmatched_appended_rows": unmatched_appended_rows,
+        "total_madden_rows_processed": raw_madden_rows + unmatched_appended_rows,
+        "box_score_games": box_score_games,
+        "total_starter_slots": len(resolved),
+        "tier1_matches": tier_counter[1],
+        "tier2_matches": tier_counter[2],
+        "tier3_matches": tier_counter[3],
+        "tier4_matches": tier_counter[4],
+        "unmatched_players_unique": unmatched_appended_rows,
+        "position_mismatches_logged": position_mismatches,
+    }
+
+
+def run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None:
+    """Run the full data build end-to-end."""
+    box_scores_df, raw_madden_df = load_raw_inputs(raw_dir)
+    raw_madden_count = len(raw_madden_df)
+
+    madden_with_ids = assign_raw_madden_ids(raw_madden_df)
+
+    overrides = load_overrides(raw_dir / "player_overrides.csv")
+    override_index = build_override_index(
+        overrides, set(madden_with_ids["madden_id"])
+    )
+
+    match_indexes = build_match_indexes(_build_madden_rows_from_df(madden_with_ids))
+
+    pairs: list[tuple[Starter, MatchResult]] = []
+    for starter in iter_starters(box_scores_df):
+        result = match_starter(starter, match_indexes, override_index)
+        _log_position_mismatch(starter, result)
+        pairs.append((starter, result))
+
+    unmatched_players = collect_unmatched_starters(pairs)
+    augmented_madden, assignments = append_unmatched_rows(
+        madden_with_ids, unmatched_players
+    )
+
+    resolved = _resolve_unmatched_ids(pairs, assignments)
+
+    fill_values = compute_fill_values(augmented_madden)
+    filled_madden = fill_unmatched_rows(augmented_madden, fill_values)
+
+    slot_to_madden_id: dict[tuple[str, str], str] = {
+        (s.game_id, f"{s.slot_column}_ID"): r.madden_id  # type: ignore[arg-type]
+        for s, r in resolved
+    }
+    processed_box_scores = rewrite_box_score_ids(box_scores_df, slot_to_madden_id)
+
+    madden_path = processed_dir / "madden_2024.csv"
+    box_scores_path = processed_dir / "box_scores_2024.csv"
+    mapping_path = processed_dir / "player_id_mapping.csv"
+    manifest_path = processed_dir / "build_manifest.json"
+
+    write_madden(filled_madden, madden_path)
+    write_box_scores(processed_box_scores, box_scores_path)
+    write_mapping(build_mapping_records(resolved), mapping_path)
+
+    counts = _counts(
+        raw_madden_rows=raw_madden_count,
+        unmatched_appended_rows=len(unmatched_players),
+        box_score_games=len(box_scores_df),
+        resolved=resolved,
+    )
+    manifest = build_manifest(
+        raw_inputs={
+            "Data/raw/box_scores_2024.csv": raw_dir / "box_scores_2024.csv",
+            "Data/raw/maddennfl24fullplayerratings.csv":
+                raw_dir / "maddennfl24fullplayerratings.csv",
+            "Data/raw/player_overrides.csv": raw_dir / "player_overrides.csv",
+        },
+        outputs={
+            "Data/processed/madden_2024.csv": madden_path,
+            "Data/processed/box_scores_2024.csv": box_scores_path,
+            "Data/processed/player_id_mapping.csv": mapping_path,
+        },
+        counts=counts,
+        repo_dir=raw_dir.parent.parent,
+    )
+    write_manifest(manifest, manifest_path)
+
+    print(
+        "tier1: {tier1_matches}, tier2: {tier2_matches}, "
+        "tier3: {tier3_matches}, tier4: {tier4_matches}, "
+        "unmatched: {unmatched_players_unique}, "
+        "position mismatches: {position_mismatches_logged}".format(**counts),
+        file=sys.stderr,
+    )

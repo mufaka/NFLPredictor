@@ -15,7 +15,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 3 | Raw Input Loading and Madden ID Assignment | Complete |
 | 4 | Tiered Matching Pipeline and Manual Overrides | Complete |
 | 5 | Unmatched Player Handling and Null-Fill | Complete |
-| 6 | Output Emission (CSVs and Manifest) | Not Started |
+| 6 | Output Emission (CSVs and Manifest) | Complete |
 | 7 | Determinism Hardening | Not Started |
 | 8 | Integration Tests and Regression Fixtures | Not Started |
 
@@ -322,41 +322,41 @@ Writes the four artifacts to `Data/processed/`. This is where the pipeline produ
 
 ### 6.1 Processed Madden CSV
 
-- [ ] In `src/nflpredictor/databuild/outputs.py`, implement `write_madden(madden_df, path)` that:
+- [x] In `src/nflpredictor/databuild/outputs.py`, implement `write_madden(madden_df, path)` that:
   - Sorts by `madden_id` ascending (`DB-OUT-12`).
   - Reorders columns so `madden_id` is first and `matched` is last (`DB-OUT-10`).
   - Writes with `index=False`, `lineterminator="\n"`, UTF-8 encoding.
 
 ### 6.2 Processed Box Scores CSV
 
-- [ ] In `outputs.py`, implement `rewrite_box_score_ids(box_scores_df, slot_to_madden_id_map) -> pd.DataFrame` that walks the 44 per-slot `_ID` columns and replaces each cell with the resolved `madden_id`. The slot map is keyed by `(game_id, slot_column)`.
-- [ ] Implement `write_box_scores(processed_box_scores_df, path)` that:
+- [x] In `outputs.py`, implement `rewrite_box_score_ids(box_scores_df, slot_to_madden_id_map) -> pd.DataFrame` that walks the 44 per-slot `_ID` columns and replaces each cell with the resolved `madden_id`. The slot map is keyed by `(game_id, slot_column)`.
+- [x] Implement `write_box_scores(processed_box_scores_df, path)` that:
   - Sorts by `GameId` ascending (`DB-OUT-05`).
   - Asserts no `_ID` column contains a blank cell (`DB-OUT-03`); raises if any blank survives.
   - Writes with the same encoding/newline settings.
 
 ### 6.3 Mapping File
 
-- [ ] In `outputs.py`, implement `build_mapping_records(match_results) -> list[MappingRecord]` that:
+- [x] In `outputs.py`, implement `build_mapping_records(match_results) -> list[MappingRecord]` that:
   - Deduplicates to one row per unique `(box_score_id, madden_id)` pair (`DB-MAP-02`).
   - Uses the most informative `note` when a pair has multiple tier hits (`DB-MAP-05`).
   - Appends position-mismatch suffixes per `DB-POS-02`.
   - Records `"blank source _id; resolved by name"` when the box-score `_ID` was blank (`DB-MAP-04`).
-- [ ] Implement `write_mapping(records, path)` that:
+- [x] Implement `write_mapping(records, path)` that:
   - Sorts by `(madden_id, box_score_id)` ascending (`DB-MAP-06`).
   - Writes with `index=False`, `lineterminator="\n"`.
 
 ### 6.4 Build Manifest
 
-- [ ] In `src/nflpredictor/databuild/manifest.py`, implement `compute_sha256(path: pathlib.Path) -> str`.
-- [ ] Implement `try_get_git_commit() -> Optional[str]` that runs `git rev-parse HEAD` and returns the hash, or `None` if not in a git repo or git is unavailable.
-- [ ] Implement `build_manifest(...)` that constructs the manifest dict per `DB-MAN-01` and `DB-MAN-02`, including the counts breakdown.
-- [ ] Implement `write_manifest(manifest_dict, path)` that uses `json.dump(..., sort_keys=True, indent=2)` and writes a trailing newline (`DB-MAN-04`).
-- [ ] Manifest is written *last* — after the three CSVs — so output SHA-256 hashes can be computed against the on-disk files.
+- [x] In `src/nflpredictor/databuild/manifest.py`, implement `compute_sha256(path: pathlib.Path) -> str`.
+- [x] Implement `try_get_git_commit() -> Optional[str]` that runs `git rev-parse HEAD` and returns the hash, or `None` if not in a git repo or git is unavailable.
+- [x] Implement `build_manifest(...)` that constructs the manifest dict per `DB-MAN-01` and `DB-MAN-02`, including the counts breakdown.
+- [x] Implement `write_manifest(manifest_dict, path)` that uses `json.dump(..., sort_keys=True, indent=2)` and writes a trailing newline (`DB-MAN-04`).
+- [x] Manifest is written *last* — after the three CSVs — so output SHA-256 hashes can be computed against the on-disk files.
 
 ### 6.5 Orchestration
 
-- [ ] In `src/nflpredictor/databuild/pipeline.py`, wire everything together into `run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None`:
+- [x] In `src/nflpredictor/databuild/pipeline.py`, wire everything together into `run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None`:
   1. Load raw inputs.
   2. Assign raw Madden IDs.
   3. Load overrides.
@@ -366,13 +366,13 @@ Writes the four artifacts to `Data/processed/`. This is where the pipeline produ
   7. Build slot-to-`madden_id` map; rewrite box-score `_ID` columns.
   8. Write Madden, box scores, mapping (in that order).
   9. Build manifest with output hashes; write manifest last.
-- [ ] Add stderr/stdout logging that summarizes counts at the end (`DB-NF-06`): "tier1: X, tier2: Y, tier3: Z, tier4: W, unmatched: U, position mismatches: P".
-- [ ] Update `src/nflpredictor/databuild/__main__.py` to call `run_build` with default paths and exit non-zero on any exception (`DB-NF-05`).
+- [x] Add stderr/stdout logging that summarizes counts at the end (`DB-NF-06`): "tier1: X, tier2: Y, tier3: Z, tier4: W, unmatched: U, position mismatches: P".
+- [x] Update `src/nflpredictor/databuild/__main__.py` to call `run_build` with default paths and exit non-zero on any exception (`DB-NF-05`).
 
 ### 6.6 Smoke Test
 
-- [ ] Run `python -m nflpredictor.databuild` against the real data. Inspect the four output files manually. Spot-check one starter end-to-end (e.g., confirm Mahomes' `madden_id` is consistent across Madden file, box scores, and mapping).
-- [ ] If anything looks wrong, do *not* patch the spec — file a note and fix the implementation.
+- [x] Run `python -m nflpredictor.databuild` against the real data. Inspect the four output files manually. Spot-check one starter end-to-end (e.g., confirm Mahomes' `madden_id` is consistent across Madden file, box scores, and mapping). _Mahomes resolves to `2024-00709` via tier 2 across Madden, mapping, and box-score outputs. Real-run counts: tier1=0, tier2=7863, tier3=2405, tier4=90, unmatched=271, position mismatches=534, total slots=11968._
+- [x] If anything looks wrong, do *not* patch the spec — file a note and fix the implementation.
 
 **Definition of done:** A real build run emits four files in `Data/processed/`; counts in the manifest look reasonable (e.g., total starter slots = 272 × 44 = 11,968); the pipeline runs end-to-end without exceptions.
 
