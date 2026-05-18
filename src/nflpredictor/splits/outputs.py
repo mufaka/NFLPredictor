@@ -64,9 +64,13 @@ def _serialise_fold(fold: Fold) -> "OrderedDict[str, Any]":
 
 
 def write_splits_artifact(artifact: dict, path: pathlib.Path) -> None:
-    """Write the artifact JSON with indent=2 and a trailing newline (SP-OUT-02)."""
+    """Write the artifact JSON with indent=2 and a trailing newline (SP-OUT-02).
+
+    ``newline="\\n"`` keeps the file byte-identical across OSes (so Phase 4's
+    source-hash gate accepts a Windows-built artifact on a Linux machine).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         # sort_keys=False — key order is intentional, set by build_splits_artifact.
         json.dump(artifact, f, indent=2)
         f.write("\n")

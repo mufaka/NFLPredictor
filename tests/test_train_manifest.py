@@ -119,7 +119,7 @@ def test_build_training_manifest_has_all_required_keys() -> None:
         phase2_manifest_git_commit="commit-phase2",
         phase3_manifest_git_commit="commit-phase3",
         training_summaries={"rung0_mean__none__s1": build_training_summary_s1(None, 7.9)},
-        repo_dir=pathlib.Path("/nonexistent"),
+        repo_dir=pathlib.Path(__file__).parent,  # any real dir; git_commit may resolve or be None
     )
     required_keys = {
         "build_timestamp_utc", "training_version", "seed", "torch_version",
@@ -177,7 +177,7 @@ def test_no_test_mae_key_anywhere_in_summaries() -> None:
         training_config_sha256="d",
         phase2_manifest_git_commit=None, phase3_manifest_git_commit=None,
         training_summaries=summaries,
-        repo_dir=pathlib.Path("/nonexistent"),
+        repo_dir=pathlib.Path(__file__).parent,  # any real dir; git_commit may resolve or be None
     )
     serialized = json.dumps(m)
     assert "test_mae" not in serialized, "TR-MAN-03 violated: manifest contains test_mae"

@@ -319,6 +319,15 @@ The 5-min CUDA budget (TR-NF-04) is the spec target. If Phase 4 on CUDA takes mu
 
 **`hash mismatch` on phase startup**: you modified a `Data/processed/` file by hand (or a previous build crashed mid-write). Re-run the offending upstream phase to regenerate.
 
+**Hash mismatches in integration tests on Windows (`madden_2024.csv`, `feature_vocab.json`, etc.)**: caused by Git's `core.autocrlf=true` (the Windows default) rewriting `\n` → `\r\n` on checkout for checked-in text files. The project ships a `.gitattributes` that forces LF for every text file, but it only takes effect on the *next* checkout. To apply it to an existing working tree:
+
+```bash
+git rm --cached -r .            # un-stage every file (working tree untouched)
+git reset --hard HEAD           # re-check-out with .gitattributes applied
+```
+
+Alternatively, set `git config --global core.autocrlf input` before cloning and the issue won't arise.
+
 **`device='cuda' but no CUDA device is available`**: explicitly set `device: "auto"` in `Data/raw/training_config.yaml` (and don't pass an env override) so the build falls back to CPU automatically, OR fix the CUDA install per §2.3.
 
 **Integration test byte-mismatch on a non-dev machine**: see §7.

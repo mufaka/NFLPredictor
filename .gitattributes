@@ -1,0 +1,25 @@
+# Force LF line endings for every checked-in text file regardless of OS.
+# Phase 1-4 build artifacts (CSV / JSON / YAML) are SHA-pinned to their bytes;
+# git autocrlf rewriting CRLF on Windows checkouts would invalidate every
+# manifest hash and break the integration test fixtures.
+
+* text=auto eol=lf
+
+*.csv  text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf
+*.py   text eol=lf
+*.toml text eol=lf
+*.txt  text eol=lf
+
+# Binary artifacts — never touch line endings.
+*.parquet binary
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.pdf     binary
+*.zip     binary
+*.gz      binary

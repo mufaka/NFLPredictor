@@ -22,7 +22,14 @@ def compute_sha256(path: pathlib.Path) -> str:
 
 
 def try_get_git_commit(repo_dir: pathlib.Path) -> Optional[str]:
-    """Return ``HEAD``'s commit hash, or ``None`` outside a git repo."""
+    """Return ``HEAD``'s commit hash, or ``None`` outside a git repo.
+
+    Swallows the common "no git here" failure modes across OSes:
+    ``FileNotFoundError`` (git not on PATH, or ``cwd`` missing on POSIX),
+    ``NotADirectoryError`` (``cwd`` missing on Windows), ``OSError`` (catch-all
+    for other ``cwd`` problems), and ``CalledProcessError`` (e.g., ``repo_dir``
+    exists but is not a git work tree).
+    """
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -31,7 +38,7 @@ def try_get_git_commit(repo_dir: pathlib.Path) -> Optional[str]:
             capture_output=True,
             text=True,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError, OSError):
         return None
     return out.stdout.strip() or None
 
@@ -67,8 +74,13 @@ def build_manifest(
 
 
 def write_manifest(manifest_dict: dict, path: pathlib.Path) -> None:
-    """Write the manifest with sorted keys + trailing newline (DB-MAN-04)."""
+    """Write the manifest with sorted keys + trailing newline (DB-MAN-04).
+
+    ``newline="\\n"`` disables Windows' text-mode CRLF translation so the
+    manifest is byte-identical across OSes — required because downstream
+    phases SHA-pin against these bytes.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest_dict, f, sort_keys=True, indent=2)
         f.write("\n")

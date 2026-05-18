@@ -56,8 +56,11 @@ def build_feature_manifest(
 
 
 def write_feature_manifest(manifest_dict: dict, path: pathlib.Path) -> None:
-    """Write the manifest with sorted keys + trailing newline (FE-MAN-03)."""
+    """Write the manifest with sorted keys + trailing newline (FE-MAN-03).
+
+    ``newline="\\n"`` keeps the file byte-identical across OSes.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest_dict, f, sort_keys=True, indent=2)
         f.write("\n")

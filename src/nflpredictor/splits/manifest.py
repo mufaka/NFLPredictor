@@ -79,8 +79,11 @@ def build_splits_manifest(
 
 
 def write_splits_manifest(manifest_dict: dict, path: pathlib.Path) -> None:
-    """Write the manifest with sorted keys + trailing newline (SP-MAN-04)."""
+    """Write the manifest with sorted keys + trailing newline (SP-MAN-04).
+
+    ``newline="\\n"`` keeps the file byte-identical across OSes.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest_dict, f, sort_keys=True, indent=2)
         f.write("\n")

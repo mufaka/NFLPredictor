@@ -47,9 +47,13 @@ def write_parquet(df: pd.DataFrame, path: pathlib.Path) -> None:
 
 
 def write_vocab(vocab: Vocabulary, path: pathlib.Path) -> None:
-    """Write the vocabulary sidecar (FE-VOC-05)."""
+    """Write the vocabulary sidecar (FE-VOC-05).
+
+    ``newline="\\n"`` keeps the file byte-identical across OSes
+    (Windows text-mode would otherwise translate ``\\n`` to ``\\r\\n``).
+    """
     payload = {key: list(values) for key, values in vocab.entries.items()}
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(payload, f, sort_keys=True, indent=2)
         f.write("\n")
