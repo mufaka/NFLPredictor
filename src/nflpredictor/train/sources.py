@@ -11,6 +11,9 @@ import json
 import pathlib
 from typing import Any, Iterable
 
+import pandas as pd
+import pyarrow.parquet as pq
+
 # Reuse the SHA helper that has carried through Phases 1, 2, and 3.
 from nflpredictor.databuild.manifest import compute_sha256
 
@@ -162,3 +165,43 @@ def high_card_vocab_keys(vocab: dict[str, list[str]], threshold: int = 8) -> fro
     ``size <= 8`` → one-hot). The threshold parameter exists for testing.
     """
     return frozenset(k for k, values in vocab.items() if len(values) > threshold)
+
+
+_SHAPE_TO_BASENAME: dict[str, str] = {
+    "flat": PHASE2_FEATURES_FLAT_BASENAME,
+    "pos": PHASE2_FEATURES_POS_BASENAME,
+}
+
+
+class LabelParityError(ValueError):
+    """Raised when features_flat and features_pos disagree on (GameId, labels) (TR-NF-02)."""
+
+
+def load_features(processed_dir: pathlib.Path, shape: str) -> pd.DataFrame:
+    """Read the Phase 2 feature parquet for ``shape`` (TR-SHAPE-02).
+
+    Returns a DataFrame sorted by ``GameId`` so any downstream slicing inherits
+    a deterministic row order.
+    """
+    if shape not in _SHAPE_TO_BASENAME:
+        raise ValueError(f"unknown shape {shape!r}; expected one of {sorted(_SHAPE_TO_BASENAME)}")
+    path = processed_dir / _SHAPE_TO_BASENAME[shape]
+    df = pq.read_table(path).to_pandas()
+    return df.sort_values("GameId", kind="mergesort").reset_index(drop=True)
+
+
+def assert_label_parity(flat: pd.DataFrame, pos: pd.DataFrame) -> None:
+    """Verify the two feature shapes share identical ``(GameId, home_score, away_score)`` triples (TR-NF-02).
+
+    Both frames must already be sorted by ``GameId`` (which ``load_features`` does).
+    Mismatch in either the GameId set or the per-game labels raises ``LabelParityError``.
+    """
+    if list(flat["GameId"]) != list(pos["GameId"]):
+        raise LabelParityError(
+            "features_flat and features_pos have different GameId sets / orderings"
+        )
+    for col in ("home_score", "away_score"):
+        if not (flat[col].to_numpy() == pos[col].to_numpy()).all():
+            raise LabelParityError(
+                f"features_flat and features_pos disagree on label column {col!r}"
+            )
