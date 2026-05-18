@@ -14,7 +14,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 2 | Config Loading and Phase 1 Source-Hash Gate | Complete |
 | 3 | Vocabulary Builder and Integer Coding | Complete |
 | 4 | Game-Level Features, Weather, and Officials | Complete |
-| 5 | Position Taxonomy and Madden Column Resolution | Not started |
+| 5 | Position Taxonomy and Madden Column Resolution | Complete |
 | 6 | Shape Assembly — B-flat and B-pos | Not started |
 | 7 | Output Emission and Pipeline Orchestration | Not started |
 | 8 | Determinism Hardening and Integration Tests | Not started |
@@ -250,30 +250,26 @@ Wires Phase 1's `madden_id` lookup to per-slot feature reads, and codifies the c
 
 ### 5.1 Position Bucket Map
 
-- [ ] In `src/nflpredictor/features/positions.py`, define `POSITION_BUCKETS: dict[str, str]` mapping every box-score position label to its bucket per §4.3 (e.g., `"QB" -> "QB"`, `"FB" -> "RB"`, `"T" -> "OL"`, `"NT" -> "DL"`).
-- [ ] Define `BUCKET_CAPACITY: dict[str, int]` from §4.3 (`QB:1, RB:2, WR:4, TE:3, OL:5, DL:5, LB:4, DB:5`).
-- [ ] Define `CANONICAL_BPOS_SLOTS: list[str]` — the deterministic per-side slot list in taxonomy order: `[QB1, RB1, RB2, WR1..WR4, TE1..TE3, OL1..OL5, DL1..DL5, LB1..LB4, DB1..DB5]`. Per-game both sides emit Home-prefixed and Away-prefixed copies in that order.
-- [ ] Implement `bucket_for_position(box_score_position: str) -> str` that raises `KeyError` with a clear message for unmapped labels (`FE-POS-03`).
+- [x] In `src/nflpredictor/features/positions.py`, define `POSITION_BUCKETS: dict[str, str]` covering all 23 box-score position labels observed in 2024 data.
+- [x] Define `BUCKET_CAPACITY: dict[str, int]` from §4.3 (`QB:1, RB:2, WR:4, TE:3, OL:5, DL:5, LB:4, DB:5` — sum 29).
+- [x] Define `CANONICAL_BPOS_SLOTS_PER_SIDE: tuple[str, ...]` — `[QB1, RB1, RB2, WR1..WR4, TE1..TE3, OL1..OL5, DL1..DL5, LB1..LB4, DB1..DB5]`. The assembler in Phase 6 prefixes `Home`/`Away` for the full B-pos slot list.
+- [x] Implement `bucket_for_position(box_score_position: str) -> str` that raises `KeyError` naming the unmapped label and the required normalization-version bump (`FE-POS-03`).
 
 ### 5.2 Madden Column Resolution
 
-- [ ] Decide whether per-slot reads live in `flat.py`/`pos.py` or in a shared helper module. Recommended: a small `slots.py` (added to the §5 layout) with `iter_starters(box_scores_df) -> Iterator[Starter]` and `resolve_slot(starter, madden_lookup, config) -> SlotFeatures` so both shape assemblers share the read path. _If the helper proves trivial, inline it instead — but pick one._
-- [ ] Implement `build_madden_lookup(madden_df: pandas.DataFrame) -> dict[str, pandas.Series]` keyed by `madden_id`. The lookup returns the full row (per FE-MAD-01).
-- [ ] Implement the per-slot read:
-  - For each Madden column in `config.madden_columns`, fetch the row's value.
-  - If the column is in `madden_categorical_columns`, leave it as a string (vocab encoding happens later).
-  - Otherwise cast to `float64`; raise immediately on a non-numeric value naming the column + `madden_id` (`FE-MAD-03`).
-- [ ] Carry the `matched` flag along as a separate per-slot `int32` value (`FE-MAD-04`).
+- [x] Created a small `slots.py` (added to the §5 layout) — shared by Phase 6's B-flat and B-pos assemblers.
+- [x] Define `CANONICAL_SLOTS: tuple[str, ...]` — the 44 box-score slot identifiers in FE-FLAT-01 / FE-OUT-06 order.
+- [x] Define a frozen `Starter` dataclass (`game_id`, `slot`, `side`, `unit`, `box_score_position`, `madden_id`, `box_score_name`) and `iter_starters(box_scores_df) -> Iterator[Starter]`.
+- [x] Implement `build_madden_lookup(madden_df) -> dict[str, dict[str, str]]` keyed by `madden_id`.
+- [x] Implement `resolve_madden_features(madden_id, lookup, config) -> tuple[dict, int]`:
+  - Categorical columns pass through as `str | None` (empty/`NaN` → `None`).
+  - Numeric pass-through columns are cast to `float`; non-numeric raises `ValueError` naming the column and `madden_id` (`FE-MAD-03`).
+  - Returns the `matched` flag as a separate `int`.
 
 ### 5.3 Tests
 
-- [ ] `tests/test_features_positions.py` (`FE-TEST-03`):
-  - Every distinct position label observed in `Data/processed/box_scores_2024.csv` maps to a bucket without raising. (Today's observed set: `C, CB, DB, DE, DL, DT, FB, FS, G, LB, MLB, NT, OG, OL, OLB, OT, QB, RB, S, SS, T, TE, WR`.)
-  - An invented label `"XYZ"` raises with a clear message.
-- [ ] `tests/test_features_madden_resolution.py`:
-  - A synthetic 3-row Madden table + a synthetic starter that points to row 2: read returns the right `Overall Rating` and `Archetype`.
-  - A starter pointing to a Madden row with `matched=0` returns the null-filled value for numeric columns and the filled `Archetype`.
-  - A numeric pass-through column containing `"6'5"` raises (`FE-MAD-03`).
+- [x] `tests/test_features_positions.py` (`FE-TEST-03`): 7 tests — every observed real label maps without raising, an unmapped label raises, capacity sum invariant, canonical slot count and order spot-checks, tricky-case bucket assertions (FB→RB, OT→OL, NT→DL, MLB→LB, FS/SS→DB), and a dict-size regression alarm.
+- [x] `tests/test_features_madden_resolution.py`: 9 tests — canonical slot order + count, happy-path resolve, matched=0 row with null-filled values, non-numeric raises (`"6'5"` for Height), missing `madden_id` raises, empty categorical → None, `iter_starters` yields 44 per game in canonical order, side/unit decomposition correctness.
 
 **Definition of done:** Both shape builders can call into a stable, tested per-slot read; the position taxonomy is exhaustively covered against real 2024 labels.
 
