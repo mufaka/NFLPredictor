@@ -1,0 +1,27 @@
+# Virtual environment
+.venv/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build outputs (reproducible from raw data + code)
+Data/processed/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Claude Code local (user-specific) settings
+.claude/settings.local.json
