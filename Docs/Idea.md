@@ -235,6 +235,8 @@ Decide per column whether it's an input feature, a label, or excluded:
 - **Pre-kickoff features**: week, day-of-week, start time, stadium, roof, surface, weather string (needs parsing — temperature, wind, humidity), home/away team codes, coach names, days of rest per team (derived from prior game date).
 - **Officials**: known at kickoff. Whether they meaningfully affect score totals is an empirical question; could start excluded and add back as a feature-engineering experiment.
 
+**Deliberately excluded by premise** — in-season form features (team W/L record, rolling point differentials, recent-game momentum). The project's premise is that *compositional and physical* state — team roster (Madden), venue, weather, officials, home/away — can produce a reasonable prediction on its own. W/L record is unmistakably correlated with outcomes, but it bundles strength-of-schedule with player-sentiment and momentum effects ("winning is contagious") that we don't want a v1 roster-strength model to absorb implicitly. Subjective and momentum-style factors are left to a follow-on model that can target them explicitly and be ablated against this one.
+
 Open question: weather is free-text (`"67 degrees, relative humidity 53%, wind 8 mph"`). Decide whether to parse into structured columns (temp, humidity, wind), one-hot a few categories, or skip for v1.
 
 ### 2D. Categorical encoding
