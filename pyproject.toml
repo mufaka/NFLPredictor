@@ -5,11 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nflpredictor"
 version = "0.1.0"
-description = "NFL game outcome predictor — Phase 1 data build pipeline."
+description = "NFL game outcome predictor — Phase 1 data build + Phase 2 feature engineering."
 requires-python = ">=3.11"
 dependencies = [
     "pandas>=2.2",
     "rapidfuzz>=3.9",
+    "pyarrow==24.0.*",
+    "pyyaml>=6",
 ]
 
 [project.optional-dependencies]

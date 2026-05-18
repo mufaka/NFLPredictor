@@ -22,7 +22,16 @@ This reads `Data/raw/{box_scores_2024.csv, maddennfl24fullplayerratings.csv, pla
 
 Re-running the build on identical inputs produces byte-identical CSVs (`tests/test_determinism.py` enforces this). Run the test suite with `pytest -q` from the activated venv.
 
-The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`. The phase plan and spec are in `Docs/Plan-Phase1-DataBuild.md` and `Docs/Spec-Phase1-DataBuild.md`.
+Phase 2 (Feature Engineering) is in progress. The feature build is invoked with:
+
+```bash
+source .venv/bin/activate
+python -m nflpredictor.features
+```
+
+It reads Phase 1's processed outputs plus `Data/raw/feature_config.yaml` and will emit `features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`, and `feature_manifest.json` into `Data/processed/`. The shipped `feature_config.yaml` is the knob for expanding the feature inventory — adding Madden columns or toggling weather/officials is a YAML edit, not a code change.
+
+The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/` and the feature module is `src/nflpredictor/features/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, and `Docs/Spec-Phase2-FeatureEngineering.md`.
 
 ## Datasets
 
