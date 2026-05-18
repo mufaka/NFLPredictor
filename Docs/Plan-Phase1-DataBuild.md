@@ -11,7 +11,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Environment, Scaffolding, and Raw Data Relocation | Complete |
-| 2 | Normalization Foundations | Not Started |
+| 2 | Normalization Foundations | Complete |
 | 3 | Raw Input Loading and Madden ID Assignment | Not Started |
 | 4 | Tiered Matching Pipeline and Manual Overrides | Not Started |
 | 5 | Unmatched Player Handling and Null-Fill | Not Started |
@@ -155,20 +155,20 @@ Implements the deterministic team-code and player-name normalization that every 
 
 ### 2.1 Team-Name Normalization
 
-- [ ] In `src/nflpredictor/databuild/teams.py`, define a module-level constant `PFR_CODE_TO_MADDEN_NICKNAME: dict[str, str]` mapping all 32 PFR three-letter codes to their Madden franchise nicknames (`kan → Chiefs`, `rav → Ravens`, `sfo → 49ers`, etc.). Sort the dict literal alphabetically by key for readability.
-- [ ] Add `normalize_team_code(pfr_code: str) -> str` that looks up the nickname; raise a clear `KeyError` for unknown codes.
-- [ ] Add `madden_nickname_to_pfr_code(nickname: str) -> str` as the reverse lookup. Useful for diagnostics.
+- [x] In `src/nflpredictor/databuild/teams.py`, define a module-level constant `PFR_CODE_TO_MADDEN_NICKNAME: dict[str, str]` mapping all 32 PFR three-letter codes to their Madden franchise nicknames (`kan → Chiefs`, `rav → Ravens`, `sfo → 49ers`, etc.). Sort the dict literal alphabetically by key for readability.
+- [x] Add `normalize_team_code(pfr_code: str) -> str` that looks up the nickname; raise a clear `KeyError` for unknown codes.
+- [x] Add `madden_nickname_to_pfr_code(nickname: str) -> str` as the reverse lookup. Useful for diagnostics.
 
 ### 2.2 Player-Name Normalization
 
-- [ ] In `src/nflpredictor/databuild/normalization.py`, define `NORMALIZATION_VERSION = "v1"` (referenced by `DB-NORM-05`).
-- [ ] Implement `normalize_name(raw: str) -> str` that performs the five steps in `DB-NORM-03`: strip suffix tokens (`Jr.`, `Sr.`, `II`, `III`, `IV` — case-insensitive, optional trailing period), fold accents via `unicodedata.normalize('NFKD', ...)` + ASCII filter, collapse whitespace, trim, lowercase.
-- [ ] Document in the function's docstring that the original input is *not* modified anywhere else in the codebase — only this function's output is used for comparison.
+- [x] In `src/nflpredictor/databuild/normalization.py`, define `NORMALIZATION_VERSION = "v1"` (referenced by `DB-NORM-05`).
+- [x] Implement `normalize_name(raw: str) -> str` that performs the five steps in `DB-NORM-03`: strip suffix tokens (`Jr.`, `Sr.`, `II`, `III`, `IV` — case-insensitive, optional trailing period), fold accents via `unicodedata.normalize('NFKD', ...)` + ASCII filter, collapse whitespace, trim, lowercase.
+- [x] Document in the function's docstring that the original input is *not* modified anywhere else in the codebase — only this function's output is used for comparison.
 
 ### 2.3 Tests for Normalization
 
-- [ ] In `tests/test_teams.py`, parametrize a test that walks every entry in `PFR_CODE_TO_MADDEN_NICKNAME` and asserts the round-trip via `madden_nickname_to_pfr_code` returns the original code. Asserts the table is exactly 32 entries.
-- [ ] In `tests/test_normalization.py`, parametrize a test covering at least these inputs (per `DB-TEST-01`):
+- [x] In `tests/test_teams.py`, parametrize a test that walks every entry in `PFR_CODE_TO_MADDEN_NICKNAME` and asserts the round-trip via `madden_nickname_to_pfr_code` returns the original code. Asserts the table is exactly 32 entries.
+- [x] In `tests/test_normalization.py`, parametrize a test covering at least these inputs (per `DB-TEST-01`):
   - `"Patrick Mahomes"` → `"patrick mahomes"`
   - `"Odafe Oweh"` → `"odafe oweh"`
   - `"Roquan Smith"` → `"roquan smith"`
@@ -180,7 +180,7 @@ Implements the deterministic team-code and player-name normalization that every 
   - `"Marvin Harrison Jr."` → `"marvin harrison"`
   - `"José Ramírez"` (or similar accented) → ASCII-folded equivalent
   - `"  Travis  Kelce  "` (extra whitespace) → `"travis kelce"`
-- [ ] Add a property-style test: `normalize_name(normalize_name(x)) == normalize_name(x)` (idempotence) for a handful of representative inputs.
+- [x] Add a property-style test: `normalize_name(normalize_name(x)) == normalize_name(x)` (idempotence) for a handful of representative inputs.
 
 **Definition of done:** All normalization tests pass; `NORMALIZATION_VERSION` is exported and referenced from `manifest.py` later.
 
