@@ -35,6 +35,8 @@ def assign_s1(
 
     def _bucket(lo: int, hi: int) -> list[str]:
         mask = (universe["week"] >= lo) & (universe["week"] <= hi)
+        # GameIds are unique (verified upstream), so the default string sort
+        # is fully tie-breaking (SP-S1-03).
         return sorted(universe.loc[mask, "GameId"].astype(str).tolist())
 
     return {

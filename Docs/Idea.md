@@ -249,7 +249,7 @@ Open question: weather is free-text (`"67 degrees, relative humidity 53%, wind 8
 
 ## Phase 3: Splits
 
-> **Status**: Settled. Boundaries, strategies, and the artifact contract are specified in `Docs/Spec-Phase3-Splits.md`.
+> **Status**: Implementation complete (2026-05-18). The split build is implemented at `src/nflpredictor/splits/` and produces two artifacts in `Data/processed/` via `python -m nflpredictor.splits` (gated on a Phase 2 source-hash check). Real-data run summary: S1 train=179 / val=45 / test=48 (272 total); S3 fold_count=9 with `k ∈ {6..14}` and S3.test ≡ S1.test; wall-clock ~0.4s. The sections below are retained for reference so the reasoning behind the chosen direction stays visible.
 
 ### Why time-aware
 

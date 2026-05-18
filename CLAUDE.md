@@ -40,7 +40,23 @@ Re-running the build on identical inputs produces byte-identical parquet, vocab,
 
 The shipped `feature_config.yaml` is the knob for expanding the feature inventory — adding Madden columns or toggling weather/officials is a YAML edit, not a code change.
 
-The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/` and the feature module is `src/nflpredictor/features/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, and `Docs/Spec-Phase2-FeatureEngineering.md`.
+Phase 3 (Splits) is implemented. Run the split build with:
+
+```bash
+source .venv/bin/activate
+python -m nflpredictor.splits
+```
+
+The build refuses to run unless Phase 2's `features_flat_2024.parquet` on disk matches the SHA recorded in `Data/processed/feature_manifest.json` (SP-IN-04). It reads that parquet's `(GameId, week)` columns plus `Data/raw/splits_config.yaml` and emits two files into `Data/processed/`:
+
+- `splits_2024.json` — split-assignment artifact. For the v1 boundaries (train Weeks 1–12 / val 13–15 / test 16–18), S1 partitions the 272 games into train=179 / val=45 / test=48. S3 emits 9 expanding-window `(train, val)` folds (`k ∈ {6..14}`) plus a `test` slice identical to S1's.
+- `splits_manifest.json` — SHA-256 hashes of the Phase 2 source parquet, the splits config, and the artifact; `splits_version`; per-strategy summaries; git commits.
+
+Re-running the build on identical inputs produces byte-identical JSON (modulo the manifest timestamp). `tests/test_splits_integration.py`, `tests/test_splits_determinism.py`, and `tests/test_splits_pipeline_run.py` enforce this. Run the test suite with `pytest -q` from the activated venv.
+
+The shipped `splits_config.yaml` is the knob for the split contract — moving week boundaries or toggling between S1/S3 is a YAML edit; a new strategy or change to artifact layout requires a `splits_version` bump.
+
+The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, and the splits module is `src/nflpredictor/splits/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, and `Docs/Spec-Phase3-Splits.md`.
 
 ## Datasets
 

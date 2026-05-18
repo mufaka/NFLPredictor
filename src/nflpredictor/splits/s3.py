@@ -45,6 +45,8 @@ def build_s3(
     for k in range(k_start, val_hi):  # stops when k + 1 > val_hi
         train_mask = universe["week"] <= k
         val_mask = universe["week"] == k + 1
+        # GameIds are unique (verified upstream), so string sort is fully
+        # tie-breaking (SP-S3-04).
         train_ids = tuple(
             sorted(universe.loc[train_mask, "GameId"].astype(str).tolist())
         )
