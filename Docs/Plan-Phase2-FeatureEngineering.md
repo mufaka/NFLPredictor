@@ -13,7 +13,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 1 | Scaffolding, Dependencies, and Default Config | Complete |
 | 2 | Config Loading and Phase 1 Source-Hash Gate | Complete |
 | 3 | Vocabulary Builder and Integer Coding | Complete |
-| 4 | Game-Level Features, Weather, and Officials | Not started |
+| 4 | Game-Level Features, Weather, and Officials | Complete |
 | 5 | Position Taxonomy and Madden Column Resolution | Not started |
 | 6 | Shape Assembly — B-flat and B-pos | Not started |
 | 7 | Output Emission and Pipeline Orchestration | Not started |
@@ -207,54 +207,36 @@ Derives every per-game column from the box-score row plus the 2024 calendar. Ind
 
 ### 4.1 NFL Week Calendar
 
-- [ ] In `src/nflpredictor/features/schedule.py`, define `NFL_2024_WEEK_BOUNDARIES: list[tuple[date, date, int]]` as a hard-coded table covering Weeks 1–18 of the 2024 regular season. Each tuple is `(week_start, week_end_inclusive, week_number)`. Source the boundaries from the actual `GameDate` distribution in `Data/processed/box_scores_2024.csv` so the table is grounded in real data.
-- [ ] Implement `week_for_date(game_date: date) -> int`; raise with a clear error if the date doesn't fall in any week (`FE-GAME-02`).
-- [ ] Note in a module docstring: this table is versioned as code and bumping `normalization_version` is required if it ever changes.
+- [x] In `src/nflpredictor/features/schedule.py`, define `NFL_2024_WEEK_BOUNDARIES: tuple[tuple[date, date, int], ...]` covering Weeks 1–18 of the 2024 regular season. Boundaries were grounded against the 58 distinct `GameDate` values observed in `Data/processed/box_scores_2024.csv`.
+- [x] Implement `week_for_date(game_date: date) -> int`; raise with a clear error if the date doesn't fall in any week (`FE-GAME-02`).
+- [x] Module docstring notes the table is versioned as code and any change requires bumping `normalization_version`.
 
 ### 4.2 Weather Parser
 
-- [ ] In `src/nflpredictor/features/weather.py`, define the compiled regex per `FE-WX-02`, including the `no wind` branch.
-- [ ] Implement `parse_weather(weather_str: str, roof: str) -> tuple[float, float, float, int]` returning `(temp_f, humidity_pct, wind_mph, is_indoor)`:
-  - Empty string → `(nan, nan, nan, 1 if roof in {"dome", "retractable roof (closed)"} else 0)` per `FE-WX-03`.
-  - Match with `wind N mph` → wind = `N`.
-  - Match with `no wind` → wind = `0`.
-  - Non-empty no-match → raise `ValueError` naming the offending string (caller adds the `GameId`) per `FE-WX-04`.
-- [ ] Implement `parse_weather_column(box_scores_df: pandas.DataFrame) -> pandas.DataFrame` returning the four-column frame in the order `temp_f, humidity_pct, wind_mph, is_indoor`. Wraps `parse_weather` and re-raises with the `GameId` attached on parse failure.
+- [x] In `src/nflpredictor/features/weather.py`, define `WEATHER_RX` per `FE-WX-02`, including the `no wind` branch.
+- [x] Implement `parse_weather(weather_str, roof) -> tuple[float, float, float, int]`. `is_indoor` is a function of `roof` only (FE-WX-03), so it's set consistently regardless of whether weather is empty.
+- [x] Implement `parse_weather_column(box_scores_df) -> pandas.DataFrame` emitting `GameId, weather_temp_f, weather_humidity_pct, weather_wind_mph, weather_is_indoor` in the order pinned by `FE-OUT-06`. Re-raises parse failures with the `GameId` attached.
 
 ### 4.3 Days-of-Rest Derivation
 
-- [ ] In `src/nflpredictor/features/pipeline.py` (or a dedicated `game_level.py` if it grows), implement `compute_days_rest(box_scores_df: pandas.DataFrame) -> pandas.DataFrame` returning a frame with columns `GameId`, `days_rest_home`, `days_rest_away`:
-  - Walk the season per team in `GameDate` order.
-  - For each team's first game, both teams' `days_rest_*` cells stay NaN (`FE-GAME-08`).
-  - For each subsequent game, compute `(current_date - prior_date).days` for whichever side the team was on.
-  - Cast to `float64`.
+- [x] In `src/nflpredictor/features/game_level.py`, implement `compute_days_rest(box_scores_df) -> pandas.DataFrame` returning `GameId`, `days_rest_home`, `days_rest_away` (both `float64`). Walks each team's games in date order; first game of the season → NaN per FE-GAME-08.
 
 ### 4.4 Other Game-Level Derivations
 
-- [ ] Implement single-purpose helpers for the remaining game-level columns:
-  - `day_of_week` (categorical): pass-through of `DayOfWeek` (full English names — `FE-GAME-03`).
-  - `start_hour` (numeric): parse `StartTime` like `"9:30am"` → `9`, `"8:20pm"` → `20`. Minutes dropped (`FE-GAME-04`).
-  - `stadium`, `roof`, `surface`, `home_coach`, `away_coach`: pass-through strings (categorical encoding happens in vocab phase).
-  - `home_team_code`, `away_team_code`: pass-through of `HomeTeamCode`/`AwayTeamCode` (categorical, shared `team_codes` vocab key per `FE-VOC-03`).
-- [ ] Implement `assemble_game_level(box_scores_df, config) -> pandas.DataFrame` that emits exactly the columns listed in `config.game_features.include`, in declared order.
+- [x] In `game_level.py`, helpers for the remaining columns: `parse_start_hour` (`9:30am` → 9, `12:00am` → 0, `12:30pm` → 12); pass-through for `day_of_week`/`stadium`/`roof`/`surface`/`home_team_code`/`away_team_code`/`home_coach`/`away_coach`.
+- [x] Implement `assemble_game_level(box_scores_df, include) -> pandas.DataFrame` emitting `GameId` plus the requested columns in declared order.
 
 ### 4.5 Officials Encoding
 
-- [ ] In `src/nflpredictor/features/pipeline.py` (officials logic is small enough to live here), define `CANONICAL_OFFICIAL_ROLES = ("Referee", "Umpire", "Down Judge", "Line Judge", "Back Judge", "Side Judge", "Field Judge")` per §4.2.
-- [ ] Implement `assemble_officials(box_scores_df) -> pandas.DataFrame` that walks `Official01_Role`/`_Name` through `Official07_*`, assigning each name to the column matching its role (`FE-OFF-02`).
-- [ ] Names from all seven role columns contribute to one shared `officials` vocabulary key (`FE-OFF-03`). The vocab-building step picks them up; this function emits raw strings.
-- [ ] Officials columns: `official_referee`, `official_umpire`, `official_down_judge`, `official_line_judge`, `official_back_judge`, `official_side_judge`, `official_field_judge`.
+- [x] In `src/nflpredictor/features/officials.py` (split out from `pipeline.py` for cohesion; not enough to grow into bloat), define `CANONICAL_OFFICIAL_ROLES` and `OFFICIAL_COLUMN_NAMES` in the order pinned by FE-OUT-06.
+- [x] Implement `assemble_officials(box_scores_df) -> pandas.DataFrame` walking `Official01..07_{Role,Name}` and routing each name to its canonical column (FE-OFF-02). Names from all seven columns will feed one shared `officials` vocab key in Phase 7 (FE-OFF-03).
 
 ### 4.6 Tests
 
-- [ ] `tests/test_features_schedule.py`: every observed `GameDate` in `Data/processed/box_scores_2024.csv` maps to a week in 1–18; dates outside the season raise.
-- [ ] `tests/test_features_weather.py` (`FE-TEST-02`): the five cases from the updated spec (typical, `no wind`, empty+dome, empty+outdoors, malformed-raises).
-- [ ] `tests/test_features_game_level.py` (`FE-TEST-04`):
-  - Days-of-rest on a 3-game synthetic schedule: first game NaN, Sun→Sun is 7, Sun→Thu is 4.
-  - `start_hour` parses `"9:30am"` → 9, `"12:30pm"` → 12, `"8:20pm"` → 20.
-  - `day_of_week` carries full names verbatim.
-  - `assemble_game_level` honors `config.game_features.include` ordering and column subset.
-- [ ] `tests/test_features_officials.py`: a synthetic game with the seven canonical roles in shuffled column order populates each `official_*` column correctly; a missing role yields `None` (encoded later as `-1`).
+- [x] `tests/test_features_schedule.py`: 5 tests covering 18-week coverage, known-date assertions (incl. Thursday opener, Christmas, final Sunday), out-of-window failures both sides, and real-data sweep.
+- [x] `tests/test_features_weather.py` (`FE-TEST-02`): 11 tests covering typical/`no wind`/empty+dome/empty+outdoors/closed-vs-open retractable/malformed/negative-temp/indoor-overrides plus `parse_weather_column` happy path and error wrapping.
+- [x] `tests/test_features_game_level.py` (`FE-TEST-04`): 10 tests covering `start_hour` examples + whitespace + failure, days-of-rest first-game NaN + 7-day + 4-day cases + dtype, and `assemble_game_level` ordering / full default set / no-days-rest subset.
+- [x] `tests/test_features_officials.py`: 6 tests covering pinned column order, shuffled-role routing, missing-role → None, unknown-role-dropped, real-data smoke (all 7 roles populated across all 272 games), and role count invariant.
 
 **Definition of done:** Every game-level column derivation has a test; weather handles the real-data `no wind` case; days-of-rest emits NaN for openers.
 
