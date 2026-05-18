@@ -12,7 +12,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 |-------|-------------|--------|
 | 1 | Scaffolding, Dependencies, and Default Config | Complete |
 | 2 | Config Loading and Phase 1 Source-Hash Gate | Complete |
-| 3 | Vocabulary Builder and Integer Coding | Not started |
+| 3 | Vocabulary Builder and Integer Coding | Complete |
 | 4 | Game-Level Features, Weather, and Officials | Not started |
 | 5 | Position Taxonomy and Madden Column Resolution | Not started |
 | 6 | Shape Assembly — B-flat and B-pos | Not started |
@@ -185,24 +185,15 @@ Implements the deterministic vocabulary construction used by every categorical c
 
 ### 3.1 Vocabulary Construction
 
-- [ ] In `src/nflpredictor/features/vocab.py`, define a `Vocabulary` dataclass:
-  - `entries: dict[str, list[str]]` — vocab key → sorted unique string values.
-  - Methods: `code(key: str, value: str | None) -> int` (returns `-1` for `None`/empty), `decode(key: str, code: int) -> str | None`, `size(key: str) -> int`.
-- [ ] Implement `build_vocabulary(observations: dict[str, set[str]]) -> Vocabulary` that:
-  - For each key, sorts the observed values lexicographically (`FE-VOC-04`).
-  - Assigns 0-based codes by position.
-  - Never includes `None`/empty as a vocabulary entry (sentinel `-1` is reserved — `FE-VOC-02`).
-  - The whole vocabulary is rebuilt per run; the builder takes no prior state (`FE-VOC-06`).
-- [ ] Implement `encode_column(values: pandas.Series, key: str, vocab: Vocabulary) -> pandas.Series` returning an `int32` series with `-1` for nulls/empties.
+- [x] In `src/nflpredictor/features/vocab.py`, define a `Vocabulary` dataclass:
+  - `entries: Mapping[str, tuple[str, ...]]` — vocab key → sorted unique string values. _Frozen dataclass; tuples for immutability._
+  - Methods: `code(key, value) -> int` (returns `-1` for `None`/empty), `decode(key, code) -> str | None`, `size(key) -> int`, plus `sizes()` for the manifest's `vocab_sizes` payload.
+- [x] Implement `build_vocabulary(observations) -> Vocabulary` that sorts observed values lexicographically per key (`FE-VOC-04`), drops `None`/empty so the `-1` sentinel is reserved (`FE-VOC-02`), and rebuilds from scratch per call (`FE-VOC-06`).
+- [x] Implement `encode_column(values, key, vocab) -> pandas.Series` returning an `int32` series with `-1` for `None`/`NaN`/empty.
 
 ### 3.2 Tests
 
-- [ ] `tests/test_features_vocab.py` (parts of `FE-TEST-10`):
-  - Build a vocabulary from `{"colors": {"red", "blue", "green"}}`; assert entries are `["blue", "green", "red"]` and codes are 0/1/2.
-  - `code("colors", None)` and `code("colors", "")` both return `-1`.
-  - `code("colors", "purple")` raises (unknown value — defensive).
-  - Building twice from identical observations produces identical entries (`FE-TEST-10` stability check at the unit level).
-  - `encode_column` on a `pandas.Series(["red", None, "blue", ""])` returns `[2, -1, 0, -1]` with dtype `int32`.
+- [x] `tests/test_features_vocab.py` (parts of `FE-TEST-10`): 13 tests cover lexicographic sort, duplicate collapse + null drop, null sentinel for `None`/`""`, unknown-value raises, unknown-key raises, decode round-trip, deterministic rebuild across input orderings, independent per-key sorting, `sizes()` excluding the sentinel, encode happy path, encode with `NaN`, encode raises on unknown, and an empty-observations edge case.
 
 **Definition of done:** Vocabulary is deterministic, sentinel-aware, and shared by all downstream encoders.
 
