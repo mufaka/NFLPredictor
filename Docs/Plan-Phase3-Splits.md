@@ -10,11 +10,11 @@ This is a single-developer learning project. Phases are sized for one person to 
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Scaffolding, Config Loading, and Phase 2 Hash Gate | Pending |
-| 2 | S1 Single-Fold Partition | Pending |
-| 3 | S3 Expanding-Window CV | Pending |
-| 4 | Output Emission and Pipeline Orchestration | Pending |
-| 5 | Determinism Hardening and Integration Tests | Pending |
+| 1 | Scaffolding, Config Loading, and Phase 2 Hash Gate | Complete |
+| 2 | S1 Single-Fold Partition | Complete |
+| 3 | S3 Expanding-Window CV | Complete |
+| 4 | Output Emission and Pipeline Orchestration | Complete |
+| 5 | Determinism Hardening and Integration Tests | Complete |
 
 ---
 
