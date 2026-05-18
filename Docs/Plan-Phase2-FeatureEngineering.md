@@ -15,7 +15,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 3 | Vocabulary Builder and Integer Coding | Complete |
 | 4 | Game-Level Features, Weather, and Officials | Complete |
 | 5 | Position Taxonomy and Madden Column Resolution | Complete |
-| 6 | Shape Assembly — B-flat and B-pos | Not started |
+| 6 | Shape Assembly — B-flat and B-pos | Complete |
 | 7 | Output Emission and Pipeline Orchestration | Not started |
 | 8 | Determinism Hardening and Integration Tests | Not started |
 
@@ -283,36 +283,21 @@ Materializes the two parquet-shaped DataFrames in memory. Output writing (and pa
 
 ### 6.1 B-flat Assembly
 
-- [ ] In `src/nflpredictor/features/flat.py`, implement `assemble_flat(box_scores_df, madden_lookup, config, vocab) -> pandas.DataFrame`:
-  - Walk the 44 slots in canonical order: `HomeOff01..11, HomeDef01..11, AwayOff01..11, AwayDef01..11`.
-  - Emit columns per `(slot, madden_column)` per `FE-FLAT-01`/`FE-FLAT-02` using the pattern `{slot}_madden_{column_snake_case}`.
-  - Emit `{slot}_position` integer-coded columns sharing the `positions` vocab key (`FE-FLAT-03`).
-  - Emit `{slot}_matched` as a separate `int32` flag column (clarified by the resolved spec — `FE-FLAT-02`, `FE-MAD-04`).
-- [ ] Helper: `_snake_case(col: str) -> str` lowercases and replaces spaces with underscores.
+- [x] In `src/nflpredictor/features/flat.py`, implement `assemble_flat(box_scores_df, madden_lookup, config, vocab) -> pandas.DataFrame` honoring the FE-OUT-06 section order: GameId, slot-major `{slot}_madden_{column_snake_case}` columns, then 44 `{slot}_position` columns, then 44 `{slot}_matched` columns.
+- [x] Categorical Madden columns → `int32` via `vocab`; numeric → `float64`; position and matched flags → `int32` per FE-OUT-02.
+- [x] Helper: `snake_case(col)` lowercases and replaces spaces with underscores (FE-FLAT-02). Made public so `pos.py` imports it.
 
 ### 6.2 B-pos Assembly
 
-- [ ] In `src/nflpredictor/features/pos.py`, implement `assemble_pos(box_scores_df, madden_lookup, config, vocab) -> pandas.DataFrame`:
-  - For each game and each side:
-    - Walk the 22 box-score slots in canonical order (`{side}Off01..11`, then `{side}Def01..11`).
-    - For each starter, look up its bucket (`positions.bucket_for_position`).
-    - Within the bucket, assign indices `1, 2, …` in encounter order (`FE-POS-02`).
-    - If the bucket overflows its capacity, drop the overflow starter and emit a stderr warning naming the `GameId` and bucket per `FE-POS-02`/§4.3.
-  - For each `(side, bucket, index)` slot in `CANONICAL_BPOS_SLOTS`:
-    - If a starter was assigned, emit `{slot}_madden_*` columns from the resolved Madden row, `{slot}_present = 1`, `{slot}_matched` from the Madden row.
-    - Otherwise emit NaN / `-1` for typed columns and `{slot}_present = 0`, `{slot}_matched = 0` (`FE-MAD-05`).
-  - Column naming per `FE-POS-04`: `{side}{bucket}{index}_madden_{column_snake_case}`, `{side}{bucket}{index}_present`, `{side}{bucket}{index}_matched`.
+- [x] In `src/nflpredictor/features/pos.py`, define `CANONICAL_BPOS_SLOTS: tuple[str, ...]` — 58 entries (29 home + 29 away) in §4.3 taxonomy order.
+- [x] Implement `_assign_one_side(row, side, game_id) -> dict[canonical_slot, (madden_id, position)]` walking `{side}Off01..11` then `{side}Def01..11` and assigning within-bucket indices in encounter order (FE-POS-02). Overflow beyond `BUCKET_CAPACITY` is dropped with a stderr warning naming the `GameId` and bucket.
+- [x] Implement `assemble_pos(box_scores_df, madden_lookup, config, vocab) -> pandas.DataFrame`. Absent slots emit NaN / `-1` for typed columns with `present=0` / `matched=0` per FE-MAD-05; assigned slots emit the resolved features with `present=1`. Column order follows FE-OUT-06: slot-major Madden cols, then all `present` flags, then all `matched` flags.
 
 ### 6.3 Tests
 
-- [ ] `tests/test_features_flat.py`:
-  - Assemble against a 1-game synthetic; assert column inventory matches the expected count (44 slots × `(len(madden_columns) + 1 position)` + 44 `_matched` flags).
-  - For a chosen slot, the `{slot}_madden_overall_rating` value matches the synthetic Madden row.
-  - `{slot}_position` codes resolve via the `positions` vocab to the right string.
-- [ ] `tests/test_features_pos.py` (`FE-TEST-09`):
-  - A 1-game synthetic with 3 WRs assigns `WR1`/`WR2`/`WR3` and leaves `WR4` with `present=0` and all per-slot columns at NaN / `-1`.
-  - The within-bucket ordering is box-score slot order: a WR appearing in `HomeOff03` becomes `HomeWR1`, a WR in `HomeOff07` becomes `HomeWR2`.
-  - A bucket-overflow synthetic (e.g., 6 OL on one side) drops the 6th and emits a warning naming the bucket.
+- [x] `tests/_features_fixtures.py` — shared synthetic-data builders (full 44-slot box-score row + matching Madden frame + vocab) used by Phase 6 and 7 tests.
+- [x] `tests/test_features_flat.py`: 6 tests — `snake_case` examples, column inventory (177 cols for v1 default), specific `Overall Rating` values, categorical decoding via vocab, dtype pinning, and matched=0 flag propagation.
+- [x] `tests/test_features_pos.py` (`FE-TEST-09`): 8 tests — `CANONICAL_BPOS_SLOTS` count/order, column inventory (233 cols for v1 default), default-lineup TE2/TE3/OL4/OL5 absent, absent-slot NaN/-1/present=0/matched=0 invariant, box-score-order within-bucket assignment (HomeOff03 WR → WR1, HomeOff07 WR → WR2), 6-OL overflow → 5 assigned + stderr warning naming GameId and bucket, categorical decode, dtype pinning.
 
 **Definition of done:** Both shapes assemble cleanly from a synthetic fixture; the absent-slot invariant is locked in.
 
