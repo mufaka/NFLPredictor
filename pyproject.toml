@@ -13,6 +13,7 @@ dependencies = [
     "pyarrow==24.0.*",
     "pyyaml>=6",
     "torch>=2.4",
+    "matplotlib>=3.10",
 ]
 
 [project.optional-dependencies]

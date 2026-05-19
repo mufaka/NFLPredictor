@@ -1,0 +1,19 @@
+evaluation_version: "v1"
+
+headline_metric: "mae"   # one of "mae" | "rmse" | "wl_accuracy" | "spread_mae" | "total_mae"
+
+breakdowns:
+  by_team:      true
+  by_week:      true
+  by_home_away: true
+  by_surface:   true
+  by_roof:      true
+
+plots:
+  scatter:              true
+  residual_distribution: true
+  ladder_summary:       true
+  breakdown_plots:      [by_week]
+  dpi:                  100
+  figure_width_inches:  8.0
+  figure_height_inches: 5.0
