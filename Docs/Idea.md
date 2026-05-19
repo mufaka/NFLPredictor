@@ -312,7 +312,7 @@ Open questions:
 
 ## Phase 5: Evaluation
 
-> **Status**: Direction inherited from Overview; refinements are exploratory.
+> **Status**: Specification complete (2026-05-18). See `Docs/Spec-Phase5-Evaluation.md`. Implementation pending. The build will consume Phase 4's 12 prediction parquets plus Phase 2's labels and emit a headline-metrics JSON, per-dimension breakdown parquets, calibration plot PNGs, and an evaluation manifest into `Data/processed/evaluation/` via `python -m nflpredictor.evaluate` (gated on a Phase 2 + Phase 3 + Phase 4 source-hash check). The sections below are retained for reference so the reasoning behind the chosen direction stays visible. **Choices**: five metrics always computed (MAE/RMSE/W-L/spread/total) with MAE as the highlighted headline; five breakdowns (team/week/home-away/surface/roof) all on by default and individually toggleable; scatter + residual + ladder-summary PNGs always on, per-week breakdown PNG on by default; every emitted prediction parquet evaluated unconditionally on every run (S1.val, S1.test, every S3 fold val, S3 pooled); no external benchmarks (Vegas closing lines declined for v1).
 
 Primary regression metrics (computed on home and away separately, then averaged):
 
@@ -329,8 +329,6 @@ Calibration plots:
 
 - Predicted score distribution vs. actual score distribution.
 - Error by week, by team, by home/away, by surface/roof.
-
-Open question: do we measure against Vegas closing lines (when available) as an "external benchmark"? Closing lines are a strong, hard-to-beat baseline; including them is honest but discouraging early on.
 
 ## Phase 6: Error Analysis & Iteration
 
@@ -464,9 +462,7 @@ Phase 1 is concrete enough to move to a specification. Later phases have intenti
 
 **Phase 4 (Model Ladder)**: Resolved by `Docs/Spec-Phase4-BaselineLadder.md` — single multi-output regressor with `nn.L1Loss` (MAE); rungs 0–3 (mean → team_mean → `nn.Linear` → small MLP) ship in v1 with rung 4 (attention) deferred; both `flat` and `pos` shapes trained per learned rung; both `S1` and `S3` strategies consumed; one-hot for low-card categoricals + learned `nn.Embedding` for high-card with a NULL slot at index 0; predictions-only outputs.
 
-**Phase 5 (Evaluation)**:
-
-- Include Vegas closing-line comparison as an external benchmark?
+**Phase 5 (Evaluation)**: Resolved by `Docs/Spec-Phase5-Evaluation.md` — five regression metrics (MAE headline, per-side RMSE, W/L accuracy, spread MAE, total MAE) always computed; five breakdown dimensions (team/week/home-away/surface/roof) all on by default and individually toggleable; scatter, residual, and ladder-summary PNGs always on with per-week breakdown PNG on by default; every Phase 4 prediction parquet evaluated unconditionally on every run including S1.test (no opt-in flag); external benchmarks (Vegas closing lines and similar) declined for v1.
 
 **Phase 6 (Error Analysis)**:
 
