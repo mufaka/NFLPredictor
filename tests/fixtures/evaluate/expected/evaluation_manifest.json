@@ -223,7 +223,7 @@
     "predictions/rung3_mlp__flat__s3.parquet": "b04d28b4ceb9bd5f2a9061b27b6ada9788ef24706a35c2d8407bfb7bdb1a197e",
     "predictions/rung3_mlp__pos__s1.parquet": "10cecc1516af269cd482583152e8eb38d5f3dba79d9644d985e2fa79a7da7d48",
     "predictions/rung3_mlp__pos__s3.parquet": "21a1042702ab2130b514df5a38a9db75f6b18f4a5529b6c7e4752d2882b8eda9",
-    "training_manifest.json": "fdbea2a9bbdb061e39bd3c62ecee647008adacc4447139fb049a28d3bc93eace"
+    "training_manifest.json": "8a56a7c22c31bf07b2fc5fa3cb6bca86a356594e4e01e3e9f57d2805dea00c1d"
   },
   "pyarrow_version": "24.0.0"
 }

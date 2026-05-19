@@ -12,7 +12,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 |-------|-------------|--------|
 | 1 | Scaffolding and Dependencies | Pending |
 | 2 | Phase 4 Backward Edit — Per-Epoch Loss-Curve Emission | Pending |
-| 3 | Phase 5 Ripple — Fixture Regen and Test Re-Pin | Pending |
+| 3 | Phase 5 Ripple — Fixture Regen and Test Re-Pin | Complete |
 | 4 | Diagnostics Helper Module | Pending |
 | 5 | Pipeline Walkthrough Notebook + Export (Deliverable 2) | Pending |
 | 6 | Reading-the-Outputs Guide (Deliverable 1) | Pending |
@@ -186,18 +186,18 @@ Absorbs the Phase 4 manifest-SHA rotation into Phase 5's downstream pins. Pure f
 
 ### 3.1 Evaluate Fixture Regeneration
 
-- [ ] Run `python -m tests.fixtures.evaluate._regenerate` to refresh the evaluate fixture. The regen consumes the updated train fixture from plan-phase 2, so the evaluate fixture's source-hash pins on Phase 4's outputs rotate naturally.
-- [ ] Inspect the diff. Expect: `tests/fixtures/evaluate/` manifest values change; metric values do not (Phase 5's outputs are semantically unchanged per DD-BWD-09).
+- [x] Run `python -m tests.fixtures.evaluate._regenerate` to refresh the evaluate fixture. The regen consumes the updated train fixture from plan-phase 2, so the evaluate fixture's source-hash pins on Phase 4's outputs rotate naturally.
+- [x] Inspect the diff. Expect: `tests/fixtures/evaluate/` manifest values change; metric values do not (Phase 5's outputs are semantically unchanged per DD-BWD-09). _Observed: only `raw_phase4/training_manifest.json` (new loss-curve SHA + `training_version: v2` + bumped `training_config_sha256`), `raw_phase3/splits_manifest.json` (timestamp + git_commit only), and `expected/evaluation_manifest.json` (the rotated `training_manifest.json` input pin) changed. Every prediction parquet SHA in the eval manifest's input list is unchanged; `expected/metrics_headline.json` and every breakdown parquet in `expected/breakdowns/` are byte-identical pre/post regen._
 
 ### 3.2 Test SHA Refresh
 
-- [ ] `tests/test_evaluate_integration.py`, `tests/test_evaluate_determinism.py`, `tests/test_evaluate_cross_phase.py`: any hardcoded SHA constants — if present — that pin Phase 4's manifest get refreshed to match the regenerated fixture. If pins are loaded from the fixture's manifest at test time, no code change is needed here.
+- [x] `tests/test_evaluate_integration.py`, `tests/test_evaluate_determinism.py`, `tests/test_evaluate_cross_phase.py`: any hardcoded SHA constants — if present — that pin Phase 4's manifest get refreshed to match the regenerated fixture. If pins are loaded from the fixture's manifest at test time, no code change is needed here. _Confirmed: `grep -lr '[a-f0-9]\{32\}' tests/test_evaluate_*.py` returns nothing; every eval test reads its pins from the fixture manifest at runtime, so the fixture-only regen is sufficient._
 
 ### 3.3 Verification
 
-- [ ] `pytest -q tests/test_evaluate_*.py` passes.
-- [ ] `pytest -q tests/test_evaluate_cross_phase.py` passes — confirms Phase 5's recomputed val MAE still equals Phase 4's `training_summaries` values (EV-TEST-08).
-- [ ] Full `pytest -q` passes.
+- [x] `pytest -q tests/test_evaluate_*.py` passes.
+- [x] `pytest -q tests/test_evaluate_cross_phase.py` passes — confirms Phase 5's recomputed val MAE still equals Phase 4's `training_summaries` values (EV-TEST-08).
+- [x] Full `pytest -q` passes. _568 passed, 6 skipped — same baseline as post-plan-phase-2._
 
 **Commit**: "Phase 6 (plan phase 3): Phase 5 fixture regen + test SHA refresh"
 
