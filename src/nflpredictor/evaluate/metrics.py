@@ -158,16 +158,21 @@ def compute_cell_metrics(
 def join_predictions_with_labels(
     predictions: pd.DataFrame, features_flat: pd.DataFrame
 ) -> pd.DataFrame:
-    """Left-join predictions on ``features_flat`` to attach ``true_home`` / ``true_away``.
+    """Left-join predictions on ``features_flat`` to attach labels + breakdown columns.
 
-    Returns a frame with: every prediction column + ``true_home`` + ``true_away``.
-    Raises on any unjoined prediction GameId (Phase 5's coverage check + the
-    upstream gates guarantee this shouldn't happen, but assert defensively).
+    The output frame carries every prediction column plus ``true_home`` /
+    ``true_away`` plus every other column the caller supplied in
+    ``features_flat`` (week / surface / roof / team codes). The breakdown
+    aggregators downstream read those columns to partition cells, so the
+    joined frame is the single source of truth for both metrics and
+    breakdown grouping. Raises on any unjoined prediction GameId.
     """
-    labels = features_flat[["GameId", "home_score", "away_score"]].rename(
+    if "home_score" not in features_flat.columns or "away_score" not in features_flat.columns:
+        raise ValueError("features_flat must carry home_score + away_score columns")
+    renamed = features_flat.rename(
         columns={"home_score": "true_home", "away_score": "true_away"}
     )
-    out = predictions.merge(labels, how="left", on="GameId")
+    out = predictions.merge(renamed, how="left", on="GameId")
     null_mask = out["true_home"].isna() | out["true_away"].isna()
     if null_mask.any():
         missing = sorted(out.loc[null_mask, "GameId"].astype(str).unique())

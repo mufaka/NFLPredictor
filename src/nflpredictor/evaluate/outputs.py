@@ -9,7 +9,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from .breakdowns import BreakdownSpec
+from .breakdowns import ALL_SPECS, BreakdownSpec
+from .config import ALLOWED_BREAKDOWN_PLOT_KEYS, EvaluationConfig
 from .metrics import METRIC_KEYS
 
 
@@ -129,3 +130,86 @@ def write_breakdown_parquet(
         compression=PARQUET_COMPRESSION,
         row_group_size=PARQUET_ROW_GROUP_SIZE,
     )
+
+
+# ---------------------------------------------------------------------------
+# Stale-output cleanup (EV-OUT-06)
+# ---------------------------------------------------------------------------
+
+
+# Suffix tags used by render_all_plots to disambiguate plot families.
+# A plot path matches a family iff its filename ends with the suffix below
+# (including the `.png` extension).
+_PLOT_FAMILY_SUFFIXES: dict[str, str] = {
+    "scatter": "__scatter.png",
+    "residual_distribution": "__residuals.png",
+}
+# breakdown_plots entries map to suffixes like "__by_week.png".
+_BREAKDOWN_PLOT_SUFFIX_FMT: str = "__{dim}.png"
+# Ladder summary plots use the standalone prefix shown below.
+_LADDER_PREFIX: str = "ladder_summary__"
+
+
+def cleanup_disabled_outputs(
+    evaluation_dir: pathlib.Path, config: EvaluationConfig
+) -> list[pathlib.Path]:
+    """Delete stale outputs whose configuration toggle is now false (EV-OUT-06).
+
+    Only files whose names match the §3.10 patterns are touched; anything
+    else in the evaluation directory is left alone (EV-OUT-05). Returns the
+    list of paths deleted (for logging / tests).
+    """
+    deleted: list[pathlib.Path] = []
+
+    # Disabled breakdown parquets.
+    breakdowns_dir = evaluation_dir / BREAKDOWNS_DIRNAME
+    if breakdowns_dir.is_dir():
+        for spec in ALL_SPECS:
+            if not config.breakdowns.is_enabled(spec.name):
+                stale = breakdowns_dir / spec.parquet_basename
+                if stale.exists():
+                    stale.unlink()
+                    deleted.append(stale)
+
+    plots_dir = evaluation_dir / PLOTS_DIRNAME
+    if not plots_dir.is_dir():
+        return deleted
+
+    # Per-family toggles (scatter, residual_distribution).
+    if not config.plots.scatter:
+        deleted.extend(_unlink_with_suffix(plots_dir, _PLOT_FAMILY_SUFFIXES["scatter"]))
+    if not config.plots.residual_distribution:
+        deleted.extend(
+            _unlink_with_suffix(plots_dir, _PLOT_FAMILY_SUFFIXES["residual_distribution"])
+        )
+    if not config.plots.ladder_summary:
+        deleted.extend(_unlink_with_prefix(plots_dir, _LADDER_PREFIX))
+    # Breakdown plot dims that aren't currently enabled.
+    enabled_breakdown_plots = set(config.plots.breakdown_plots)
+    for dim in sorted(ALLOWED_BREAKDOWN_PLOT_KEYS):
+        if dim not in enabled_breakdown_plots:
+            deleted.extend(
+                _unlink_with_suffix(plots_dir, _BREAKDOWN_PLOT_SUFFIX_FMT.format(dim=dim))
+            )
+
+    return deleted
+
+
+def _unlink_with_suffix(dir_path: pathlib.Path, suffix: str) -> list[pathlib.Path]:
+    """Delete every PNG in ``dir_path`` whose filename ends with ``suffix``."""
+    out: list[pathlib.Path] = []
+    for p in sorted(dir_path.iterdir()):
+        if p.is_file() and p.name.endswith(suffix):
+            p.unlink()
+            out.append(p)
+    return out
+
+
+def _unlink_with_prefix(dir_path: pathlib.Path, prefix: str) -> list[pathlib.Path]:
+    """Delete every PNG in ``dir_path`` whose filename starts with ``prefix``."""
+    out: list[pathlib.Path] = []
+    for p in sorted(dir_path.iterdir()):
+        if p.is_file() and p.name.startswith(prefix) and p.suffix == ".png":
+            p.unlink()
+            out.append(p)
+    return out

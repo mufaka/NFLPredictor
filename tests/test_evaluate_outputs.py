@@ -16,12 +16,14 @@ from nflpredictor.evaluate.breakdowns import (
     BY_TEAM,
     BY_WEEK,
 )
+from nflpredictor.evaluate.config import BreakdownToggles, EvaluationConfig, PlotConfig
 from nflpredictor.evaluate.metrics import METRIC_KEYS
 from nflpredictor.evaluate.outputs import (
     BREAKDOWNS_DIRNAME,
     EVALUATION_DIRNAME,
     PARQUET_COMPRESSION,
     PLOTS_DIRNAME,
+    cleanup_disabled_outputs,
     ensure_evaluation_dirs,
     write_breakdown_parquet,
     write_metrics_headline,
@@ -327,3 +329,149 @@ def test_breakdown_parquet_uses_snappy(tmp_path: pathlib.Path) -> None:
     # least on one column to confirm the writer parameter is in effect.
     md = pf.metadata.row_group(0).column(0)
     assert md.compression.lower() == PARQUET_COMPRESSION
+
+
+# ---------------------------------------------------------------------------
+# cleanup_disabled_outputs (EV-OUT-06)
+# ---------------------------------------------------------------------------
+
+
+def _populate_evaluation_dir(eval_dir: pathlib.Path) -> dict[str, pathlib.Path]:
+    """Drop a stand-in file at every §3.10 path so cleanup has something to find."""
+    br = eval_dir / BREAKDOWNS_DIRNAME
+    pl = eval_dir / PLOTS_DIRNAME
+    br.mkdir(parents=True, exist_ok=True)
+    pl.mkdir(parents=True, exist_ok=True)
+
+    paths: dict[str, pathlib.Path] = {}
+    # Breakdown parquets.
+    for name in ("by_team", "by_week", "by_home_away", "by_surface", "by_roof"):
+        p = br / f"{name}.parquet"
+        p.write_bytes(b"x")
+        paths[f"br_{name}"] = p
+    # Plot families.
+    for fname in (
+        "rung0_mean__none__s1__val__scatter.png",
+        "rung0_mean__none__s1__val__residuals.png",
+        "rung0_mean__none__s1__val__by_week.png",
+        "rung0_mean__none__s1__val__by_team.png",
+        "rung0_mean__none__s1__val__by_home_away.png",
+        "ladder_summary__val.png",
+        "ladder_summary__pooled.png",
+    ):
+        p = pl / fname
+        p.write_bytes(b"x")
+        paths[f"pl_{fname}"] = p
+    # An unrelated file in evaluation/ that cleanup must NOT touch.
+    foreign = eval_dir / "not_a_phase5_output.txt"
+    foreign.write_bytes(b"x")
+    paths["foreign"] = foreign
+    return paths
+
+
+def _make_config(
+    *,
+    breakdowns: dict[str, bool],
+    scatter: bool = True,
+    residual_distribution: bool = True,
+    ladder_summary: bool = True,
+    breakdown_plots: tuple[str, ...] = ("by_week",),
+) -> EvaluationConfig:
+    bk = BreakdownToggles(**breakdowns)
+    plots = PlotConfig(
+        scatter=scatter,
+        residual_distribution=residual_distribution,
+        ladder_summary=ladder_summary,
+        breakdown_plots=breakdown_plots,
+        dpi=100,
+        figure_width_inches=8.0,
+        figure_height_inches=5.0,
+    )
+    return EvaluationConfig(
+        evaluation_version="v1",
+        headline_metric="mae",
+        breakdowns=bk,
+        plots=plots,
+    )
+
+
+def test_cleanup_disabled_breakdown_deletes_parquet(tmp_path: pathlib.Path) -> None:
+    eval_dir = tmp_path / "evaluation"
+    eval_dir.mkdir()
+    files = _populate_evaluation_dir(eval_dir)
+    cfg = _make_config(breakdowns={
+        "by_team": False, "by_week": True, "by_home_away": True,
+        "by_surface": True, "by_roof": True,
+    })
+    deleted = cleanup_disabled_outputs(eval_dir, cfg)
+    assert files["br_by_team"] in deleted
+    assert not files["br_by_team"].exists()
+    # All other breakdown parquets survive.
+    for name in ("by_week", "by_home_away", "by_surface", "by_roof"):
+        assert files[f"br_{name}"].exists()
+    # Foreign file always survives.
+    assert files["foreign"].exists()
+
+
+def test_cleanup_disabled_scatter_deletes_only_scatter_pngs(tmp_path: pathlib.Path) -> None:
+    eval_dir = tmp_path / "evaluation"
+    eval_dir.mkdir()
+    files = _populate_evaluation_dir(eval_dir)
+    cfg = _make_config(
+        breakdowns={k: True for k in (
+            "by_team", "by_week", "by_home_away", "by_surface", "by_roof"
+        )},
+        scatter=False,
+    )
+    cleanup_disabled_outputs(eval_dir, cfg)
+    assert not files["pl_rung0_mean__none__s1__val__scatter.png"].exists()
+    # Residual, by_week, ladder, etc. survive.
+    assert files["pl_rung0_mean__none__s1__val__residuals.png"].exists()
+    assert files["pl_rung0_mean__none__s1__val__by_week.png"].exists()
+    assert files["pl_ladder_summary__val.png"].exists()
+    assert files["foreign"].exists()
+
+
+def test_cleanup_disabled_ladder_deletes_all_ladder_pngs(tmp_path: pathlib.Path) -> None:
+    eval_dir = tmp_path / "evaluation"
+    eval_dir.mkdir()
+    files = _populate_evaluation_dir(eval_dir)
+    cfg = _make_config(
+        breakdowns={k: True for k in (
+            "by_team", "by_week", "by_home_away", "by_surface", "by_roof"
+        )},
+        ladder_summary=False,
+    )
+    cleanup_disabled_outputs(eval_dir, cfg)
+    assert not files["pl_ladder_summary__val.png"].exists()
+    assert not files["pl_ladder_summary__pooled.png"].exists()
+    assert files["pl_rung0_mean__none__s1__val__scatter.png"].exists()
+
+
+def test_cleanup_disabled_breakdown_plots_deletes_dim_pngs(tmp_path: pathlib.Path) -> None:
+    """If by_team isn't in breakdown_plots, its plot family is purged."""
+    eval_dir = tmp_path / "evaluation"
+    eval_dir.mkdir()
+    files = _populate_evaluation_dir(eval_dir)
+    cfg = _make_config(
+        breakdowns={k: True for k in (
+            "by_team", "by_week", "by_home_away", "by_surface", "by_roof"
+        )},
+        breakdown_plots=("by_week",),  # by_team and by_home_away plots are off
+    )
+    cleanup_disabled_outputs(eval_dir, cfg)
+    assert not files["pl_rung0_mean__none__s1__val__by_team.png"].exists()
+    assert not files["pl_rung0_mean__none__s1__val__by_home_away.png"].exists()
+    # by_week stays
+    assert files["pl_rung0_mean__none__s1__val__by_week.png"].exists()
+
+
+def test_cleanup_is_noop_when_evaluation_dir_empty(tmp_path: pathlib.Path) -> None:
+    eval_dir = tmp_path / "evaluation"
+    eval_dir.mkdir()
+    cfg = _make_config(breakdowns={k: False for k in (
+        "by_team", "by_week", "by_home_away", "by_surface", "by_roof"
+    )}, scatter=False, residual_distribution=False, ladder_summary=False,
+        breakdown_plots=())
+    deleted = cleanup_disabled_outputs(eval_dir, cfg)
+    assert deleted == []
