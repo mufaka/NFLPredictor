@@ -20,6 +20,10 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+docs = [
+    "jupyter",
+    "nbconvert",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

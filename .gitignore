@@ -25,3 +25,8 @@ Data/processed/
 
 # Claude Code local (user-specific) settings
 .claude/settings.local.json
+
+# Jupyter checkpoints and nbconvert scratch
+.ipynb_checkpoints/
+*.nbconvert.*
+.virtual_documents/
