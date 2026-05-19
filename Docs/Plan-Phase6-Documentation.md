@@ -10,11 +10,11 @@ This is a single-developer learning project. Phases are sized for one person to 
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Scaffolding and Dependencies | Pending |
-| 2 | Phase 4 Backward Edit — Per-Epoch Loss-Curve Emission | Pending |
+| 1 | Scaffolding and Dependencies | Complete |
+| 2 | Phase 4 Backward Edit — Per-Epoch Loss-Curve Emission | Complete |
 | 3 | Phase 5 Ripple — Fixture Regen and Test Re-Pin | Complete |
 | 4 | Diagnostics Helper Module | Complete |
-| 5 | Pipeline Walkthrough Notebook + Export (Deliverable 2) | Pending |
+| 5 | Pipeline Walkthrough Notebook + Export (Deliverable 2) | Complete |
 | 6 | Reading-the-Outputs Guide (Deliverable 1) | Pending |
 | 7 | Training-Dynamics Doc + Companion Notebook (Deliverable 4) | Pending |
 | 8 | Wrap-Up — CLAUDE.md, Idea.md Status, Final Review | Pending |
@@ -246,32 +246,32 @@ Authors `notebooks/phase6_walkthrough.ipynb` and produces `Docs/Phase6-Walkthrou
 
 ### 5.1 Notebook Authoring
 
-- [ ] Create `notebooks/phase6_walkthrough.ipynb`. Pick the walkthrough game (e.g., `202409050kan` — Week 1, KC home opener) and declare it as a constant in the first code cell.
-- [ ] Structure the notebook into the six top-level sections required by DD-WT-02. Each section opens with a markdown cell explaining what's about to be shown and why; the following code cells call into `nflpredictor.diagnostics.*` and render dataframes / plots.
+- [x] Create `notebooks/phase6_walkthrough.ipynb`. Pick the walkthrough game (e.g., `202409050kan` — Week 1, KC home opener) and declare it as a constant in the first code cell. _Picked `202411280dal` (Dallas Cowboys Thanksgiving 2024, Week 13) — same game the diagnostics tests use; it lives in S1.val and S3 fold k=12 val so the trace exercises all 12 prediction parquets._
+- [x] Structure the notebook into the six top-level sections required by DD-WT-02. Each section opens with a markdown cell explaining what's about to be shown and why; the following code cells call into `nflpredictor.diagnostics.*` and render dataframes / plots.
   - Section 1: Game selection rationale.
   - Section 2: Raw box-score row + Madden join. Show all 44 starter slots with `_ID` → `madden_id` provenance.
   - Section 3: Feature encoding. Show B-flat and B-pos vectors; expand at least one categorical column to walk the raw → integer-code → embedding-lookup chain.
   - Section 4: Split assignment. Show S1 bucket and S3 fold membership.
   - Section 5: Predictions per learned combination. Side-by-side pred vs. actual.
   - Section 6: Locate the game on each Phase 5 plot. Print its row in each breakdown parquet.
-- [ ] Run all cells in order from a clean kernel. Confirm every cell completes without error and produces expected output.
-- [ ] Commit the notebook in its executed state (cell outputs included) per DD-WT-03.
+- [x] Run all cells in order from a clean kernel. Confirm every cell completes without error and produces expected output. _Executed via `jupyter nbconvert --to notebook --execute --inplace` against the eval fixture; staged composite `processed_dir` from `tests/fixtures/evaluate/` so the CPU-only dev box can render real outputs in every section. Section 6 prints breakdown rows; the actual PNGs are produced by the real-data Phase 5 run on the CUDA machine and the section documents that out-of-fixture path explicitly._
+- [x] Commit the notebook in its executed state (cell outputs included) per DD-WT-03.
 
 ### 5.2 Markdown Export
 
-- [ ] Run `jupyter nbconvert --to markdown notebooks/phase6_walkthrough.ipynb --output ../Docs/Phase6-Walkthrough.md` from the `notebooks/` directory (or the equivalent absolute-path invocation from the repo root) per DD-WT-04 / DD-INT-02.
-- [ ] Open the generated `Docs/Phase6-Walkthrough.md` and confirm it renders cleanly — no broken image refs, no orphaned `<div>` tags, no escaped HTML where prose should be.
-- [ ] Commit both files (`.ipynb` and `.md`) in the same commit.
+- [x] Run `jupyter nbconvert --to markdown notebooks/phase6_walkthrough.ipynb --output ../Docs/Phase6-Walkthrough.md` from the `notebooks/` directory (or the equivalent absolute-path invocation from the repo root) per DD-WT-04 / DD-INT-02. _Exported 22366 bytes; six `## N. ...` section headers present in order._
+- [x] Open the generated `Docs/Phase6-Walkthrough.md` and confirm it renders cleanly — no broken image refs, no orphaned `<div>` tags, no escaped HTML where prose should be.
+- [x] Commit both files (`.ipynb` and `.md`) in the same commit.
 
 ### 5.3 Tests
 
-- [ ] `tests/test_phase6_docs.py`: add `test_walkthrough_export_exists` (DD-TEST-07) — asserts `Docs/Phase6-Walkthrough.md` exists and is non-empty (e.g., `len(content) > 500` to catch trivial empties without being brittle to prose changes).
-- [ ] `tests/test_phase6_docs.py`: add `test_walkthrough_has_required_sections` — regex-scans for the six section headers required by DD-WT-02 (e.g., "Phase 1 — raw box-score row", "Phase 2 — feature encoding", etc.). The exact header strings are committed to the notebook and asserted by the test.
+- [x] `tests/test_phase6_docs.py`: add `test_walkthrough_export_exists` (DD-TEST-07) — asserts `Docs/Phase6-Walkthrough.md` exists and is non-empty (e.g., `len(content) > 500` to catch trivial empties without being brittle to prose changes).
+- [x] `tests/test_phase6_docs.py`: add `test_walkthrough_has_required_sections` — regex-scans for the six section headers required by DD-WT-02 (e.g., "Phase 1 — raw box-score row", "Phase 2 — feature encoding", etc.). The exact header strings are committed to the notebook and asserted by the test.
 
 ### 5.4 Verification
 
-- [ ] `pytest -q tests/test_phase6_docs.py` passes.
-- [ ] Full `pytest -q` passes.
+- [x] `pytest -q tests/test_phase6_docs.py` passes. _2 tests pass._
+- [x] Full `pytest -q` passes. _590 passed, 6 skipped — up from 589 (+2 new docs tests, −1 placeholder)._
 
 **Commit**: "Phase 6 (plan phase 5): pipeline walkthrough notebook + markdown export"
 
