@@ -10,12 +10,12 @@ This is a single-developer learning project. Phases are sized for one person to 
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Scaffolding, Config, and Upstream Hash Gates | Not started |
-| 2 | Sources, Predictions Loader, and Metric Primitives | Not started |
-| 3 | Headline Metrics, Breakdowns, and Tabular Writers | Not started |
-| 4 | Plot Rendering | Not started |
-| 5 | Pipeline Orchestration, Manifest, and Real-Data Smoke Run | Not started |
-| 6 | Determinism Hardening, Integration Tests, and Documentation | Not started |
+| 1 | Scaffolding, Config, and Upstream Hash Gates | Complete (2026-05-18) |
+| 2 | Sources, Predictions Loader, and Metric Primitives | Complete (2026-05-18) |
+| 3 | Headline Metrics, Breakdowns, and Tabular Writers | Complete (2026-05-18) |
+| 4 | Plot Rendering | Complete (2026-05-18) |
+| 5 | Pipeline Orchestration, Manifest, and Real-Data Smoke Run | Complete (2026-05-18); real-data smoke deferred to the CUDA machine until Phase 4 outputs exist on disk |
+| 6 | Determinism Hardening, Integration Tests, and Documentation | Complete (2026-05-18); §6.7 wall-clock measurement deferred behind the real-data smoke |
 
 ---
 
