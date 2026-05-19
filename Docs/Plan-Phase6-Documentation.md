@@ -13,7 +13,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 1 | Scaffolding and Dependencies | Pending |
 | 2 | Phase 4 Backward Edit — Per-Epoch Loss-Curve Emission | Pending |
 | 3 | Phase 5 Ripple — Fixture Regen and Test Re-Pin | Complete |
-| 4 | Diagnostics Helper Module | Pending |
+| 4 | Diagnostics Helper Module | Complete |
 | 5 | Pipeline Walkthrough Notebook + Export (Deliverable 2) | Pending |
 | 6 | Reading-the-Outputs Guide (Deliverable 1) | Pending |
 | 7 | Training-Dynamics Doc + Companion Notebook (Deliverable 4) | Pending |
@@ -209,32 +209,32 @@ Implements the testable helpers the walkthrough notebook and training-dynamics n
 
 ### 4.1 Per-Game Trace Helpers (`src/nflpredictor/diagnostics/trace.py`)
 
-- [ ] `load_raw_game(game_id: str) -> pandas.Series` — reads the single row from `Data/raw/box_scores_2024.csv` matching `GameId == game_id`. Raises if not found.
-- [ ] `resolve_starters(game_id: str) -> pandas.DataFrame` — returns one row per starter slot for the given game, joining the raw `_ID` (PFR-style or blank) to its resolved `madden_id` via `Data/processed/player_id_mapping.csv`, plus the `note` column showing the resolution provenance.
-- [ ] `lookup_split_membership(game_id: str) -> dict` — returns a dict like `{"S1": "val", "S3_folds": [12]}` indicating which split slices contain this game.
-- [ ] `lookup_predictions(game_id: str) -> pandas.DataFrame` — returns one row per `(combination_id, slice)` that emitted a prediction for this game, with `pred_home`, `pred_away`, `true_home`, `true_away`, `residual_home`, `residual_away`.
+- [x] `load_raw_game(game_id: str) -> pandas.Series` — reads the single row from `Data/raw/box_scores_2024.csv` matching `GameId == game_id`. Raises if not found.
+- [x] `resolve_starters(game_id: str) -> pandas.DataFrame` — returns one row per starter slot for the given game, joining the raw `_ID` (PFR-style or blank) to its resolved `madden_id` via `Data/processed/player_id_mapping.csv`, plus the `note` column showing the resolution provenance.
+- [x] `lookup_split_membership(game_id: str) -> dict` — returns a dict like `{"S1": "val", "S3_folds": [12]}` indicating which split slices contain this game. _Implemented as `{"S1": str|None, "S3_folds": list[int], "S3_test": bool}`; the list contains the `k` values (6–14) of every fold whose val slice contains the game, and `S3_test` flags membership in S3's held-out test slice._
+- [x] `lookup_predictions(game_id: str) -> pandas.DataFrame` — returns one row per `(combination_id, slice)` that emitted a prediction for this game, with `pred_home`, `pred_away`, `true_home`, `true_away`, `residual_home`, `residual_away`. _Returns an empty (correctly-typed) frame when `Data/processed/predictions/` is absent — covers the dev-machine "no Phase 4 run yet" case gracefully._
 
 ### 4.2 Encoded-Vector Reconstruction (`src/nflpredictor/diagnostics/encoding.py`)
 
-- [ ] `encode_one_game_flat(game_id: str) -> pandas.Series` — returns the row from `features_flat_2024.parquet` for this game.
-- [ ] `encode_one_game_pos(game_id: str) -> pandas.Series` — returns the row from `features_pos_2024.parquet`.
-- [ ] `explain_categorical(column: str, raw_value: str) -> dict` — for a categorical column, returns `{"raw": raw_value, "vocab_key": ..., "integer_code": ..., "embedding_table": ...}` so the notebook can show the categorical → integer-code → embedding chain.
+- [x] `encode_one_game_flat(game_id: str) -> pandas.Series` — returns the row from `features_flat_2024.parquet` for this game.
+- [x] `encode_one_game_pos(game_id: str) -> pandas.Series` — returns the row from `features_pos_2024.parquet`.
+- [x] `explain_categorical(column: str, raw_value: str) -> dict` — for a categorical column, returns `{"raw": raw_value, "vocab_key": ..., "integer_code": ..., "embedding_table": ...}` so the notebook can show the categorical → integer-code → embedding chain. _Implementation also reports `vocab_size` and `routing` (`"embedding"` for >8 entries, `"one_hot"` for ≤8) so the notebook can name the routing decision explicitly. The `integer_code` includes Phase 4's `NULL_BUMP=1` so it matches what the encoder consumes (TR-CAT-07)._
 
 ### 4.3 Loss-Curve Loader (`src/nflpredictor/diagnostics/loss_curves.py`)
 
-- [ ] `load_loss_curves() -> pandas.DataFrame` — reads `Data/processed/training_loss_curves.parquet`. Verifies the SHA against `training_manifest.json` (raises on mismatch, following the same hash-pinning discipline as Phase 5).
-- [ ] `filter_curves(df, combination_id: str | None = None, fold: int | None = None) -> pandas.DataFrame` — small filtering helper for the plotting notebook.
+- [x] `load_loss_curves() -> pandas.DataFrame` — reads `Data/processed/training_loss_curves.parquet`. Verifies the SHA against `training_manifest.json` (raises on mismatch, following the same hash-pinning discipline as Phase 5). _Raises `LossCurvesIntegrityError` on SHA divergence; a `verify_sha=False` escape hatch is provided for hand-crafted fixtures._
+- [x] `filter_curves(df, combination_id: str | None = None, fold: int | None = None) -> pandas.DataFrame` — small filtering helper for the plotting notebook.
 
 ### 4.4 Tests (`tests/test_diagnostics.py`)
 
-- [ ] Unit tests cover each helper against the existing train + evaluate fixtures. Pick one fixture game ID and assert each helper returns the expected shape and a couple of representative values.
-- [ ] A negative test asserts that `load_raw_game` on an unknown `GameId` raises a clear error.
-- [ ] A hash-mismatch test asserts that `load_loss_curves` raises when the parquet on disk has been tampered with (mutate a copy in a tmp dir, point the loader at it via a patchable constant or pass-through arg).
+- [x] Unit tests cover each helper against the existing train + evaluate fixtures. Pick one fixture game ID and assert each helper returns the expected shape and a couple of representative values. _Test GameId is `202411280dal` — it lives in S1 val and in S3 fold k=12 val, so it appears in all 12 prediction parquets._
+- [x] A negative test asserts that `load_raw_game` on an unknown `GameId` raises a clear error.
+- [x] A hash-mismatch test asserts that `load_loss_curves` raises when the parquet on disk has been tampered with (mutate a copy in a tmp dir, point the loader at it via a patchable constant or pass-through arg).
 
 ### 4.5 Verification
 
-- [ ] `pytest -q tests/test_diagnostics.py` passes.
-- [ ] Full `pytest -q` passes.
+- [x] `pytest -q tests/test_diagnostics.py` passes. _22 tests pass._
+- [x] Full `pytest -q` passes. _589 passed, 6 skipped — up from 568 (+22 new tests, −1 placeholder)._
 
 **Commit**: "Phase 6 (plan phase 4): diagnostics helper module + unit tests"
 
