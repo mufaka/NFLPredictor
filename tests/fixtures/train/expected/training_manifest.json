@@ -17,7 +17,8 @@
     "predictions/rung3_mlp__flat__s1.parquet": "1e1e22616d991118a90dee5bf518a0902de8be9d9606e71f55fb38377e1db258",
     "predictions/rung3_mlp__flat__s3.parquet": "b04d28b4ceb9bd5f2a9061b27b6ada9788ef24706a35c2d8407bfb7bdb1a197e",
     "predictions/rung3_mlp__pos__s1.parquet": "10cecc1516af269cd482583152e8eb38d5f3dba79d9644d985e2fa79a7da7d48",
-    "predictions/rung3_mlp__pos__s3.parquet": "21a1042702ab2130b514df5a38a9db75f6b18f4a5529b6c7e4752d2882b8eda9"
+    "predictions/rung3_mlp__pos__s3.parquet": "21a1042702ab2130b514df5a38a9db75f6b18f4a5529b6c7e4752d2882b8eda9",
+    "training_loss_curves.parquet": "a1545af5511087f799d32ef6b3cedecfc53a7ec27939cbfcd07e624c4510fe4d"
   },
   "phase2_manifest_git_commit": "fixture-phase2",
   "phase2_source_sha256": {
@@ -25,13 +26,13 @@
     "Data/processed/features_flat_2024.parquet": "747983ddb249a56c3281bc2ad0540e38e6c637d8087f0e65addcdf210a0bd8ff",
     "Data/processed/features_pos_2024.parquet": "4eb6c17259f46a02b4a70f78ccd5d1b8a6ae65d61a34972ef0a6e919493ba4cd"
   },
-  "phase3_manifest_git_commit": "9354783afae2dcf310ee590c5d8ddaf522270b6e",
+  "phase3_manifest_git_commit": "75a8fa03f905d24645dddb06ff7e287e89b0be50",
   "phase3_source_sha256": {
     "Data/processed/splits_2024.json": "92817291b01c5bcbb15b10feafe5c6fbdc5762f6bdbec36dcb3bb8a3fdef66ee"
   },
   "seed": 1729,
   "torch_version": "2.12.0+cpu",
-  "training_config_sha256": "60182d6bff1a193df431c847a9987dcd39414a4d2ca2cd98d7ad25e6679654c7",
+  "training_config_sha256": "0f4a31ecee22a70facfcba09720c8884a19f7effee703e8769995bd16dc7c2ff",
   "training_summaries": {
     "rung0_mean__none__s1": {
       "best_epoch": null,
@@ -484,5 +485,5 @@
       ]
     }
   },
-  "training_version": "v1"
+  "training_version": "v2"
 }

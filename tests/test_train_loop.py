@@ -134,9 +134,9 @@ def test_best_epoch_holds_lowest_val_mae(monkeypatch: pytest.MonkeyPatch) -> Non
     from nflpredictor.train import train_loop as tl
     # 11 evals = 1 baseline (epoch 0) + 10 epochs. Minimum is 30.0 at epoch 2.
     trajectory = iter([100.0, 50.0, 30.0, 35.0, 40.0, 32.0, 33.0, 34.0, 36.0, 38.0, 39.0])
-    def fake_eval(model: nn.Module, val: Any) -> float:
-        return next(trajectory)
-    monkeypatch.setattr(tl, "_eval_val_mae", fake_eval)
+    def fake_eval(model: nn.Module, val: Any) -> tuple[torch.Tensor, float]:
+        return torch.zeros((val.labels.shape[0], 2)), next(trajectory)
+    monkeypatch.setattr(tl, "_eval_val", fake_eval)
 
     train, val, cls = _linear_label_fixture()
     device = resolve_device("cpu")
@@ -160,7 +160,10 @@ def test_early_stop_on_plateau(monkeypatch: pytest.MonkeyPatch) -> None:
     from nflpredictor.train import train_loop as tl
     # Baseline 100; epoch-1 drops to 50; then plateau (every epoch == 50.0001 = no improvement).
     trajectory = iter([100.0, 50.0] + [50.0001] * 10)
-    monkeypatch.setattr(tl, "_eval_val_mae", lambda model, val: next(trajectory))
+    monkeypatch.setattr(
+        tl, "_eval_val",
+        lambda model, val: (torch.zeros((val.labels.shape[0], 2)), next(trajectory)),
+    )
 
     train, val, cls = _linear_label_fixture()
     device = resolve_device("cpu")

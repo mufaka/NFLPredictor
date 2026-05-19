@@ -1,4 +1,4 @@
-training_version: "v1"
+training_version: "v2"
 
 seed: 1729
 device: "auto"   # one of "auto" | "cpu" | "cuda"

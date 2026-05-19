@@ -480,6 +480,25 @@ Locks the training build against silent drift, ships the synthetic fixture and t
 
 ---
 
+## Phase 7 (Amendment): Per-Epoch Loss-Curve Emission
+
+Landed as plan-phase 2 of [Plan-Phase6-Documentation.md](./Plan-Phase6-Documentation.md). Implements TR-LC-* in [Spec-Phase4-BaselineLadder.md §3.12](./Spec-Phase4-BaselineLadder.md) and DD-LC-* / DD-BWD-01..06 in [Spec-Phase6-Documentation.md](./Spec-Phase6-Documentation.md). Summarized here so this plan remains self-describing; the canonical step list lives in the Phase 6 plan.
+
+- `src/nflpredictor/train/train_loop.py`: extended `TrainingResult` with a `loss_curve: tuple[EpochRecord, ...]` field. Per-epoch capture inside `train_learned_rung` records `(epoch, train_loss, val_loss, val_mae)`. `train_loss` is the mean of per-batch L1 losses; `val_loss` is the tensor-side L1 MAE (reusing the eval already used for early stopping); `val_mae` is recomputed via a Python-side per-prediction formula that matches `training_summaries.val_mae` to machine precision (DD-LC-07 / TR-LC-07).
+- `src/nflpredictor/train/outputs.py`: added `TRAINING_LOSS_CURVES_BASENAME` constant and `write_loss_curves` writer (snappy + row_group_size=1024, same as the prediction parquets).
+- `src/nflpredictor/train/pipeline.py`: collects loss-curve rows across combinations × folds and emits `Data/processed/training_loss_curves.parquet` before computing `output_sha256`. A new entry `output_sha256["training_loss_curves.parquet"]` records its SHA-256.
+- `Data/raw/training_config.yaml`: `training_version` bumped `"v1"` → `"v2"` per DD-LC-04 / TR-LC-04.
+- `tests/test_loss_curves.py`: schema (DD-TEST-03), sort-order (DD-TEST-04), integrity vs. `training_summaries` (DD-TEST-02), epoch coverage, and capture-is-read-only (DD-TEST-06).
+- `tests/test_train_integration.py`: byte-identity of the loss-curve parquet against the fixture + manifest SHA + version-bump assertions (DD-BWD-05).
+- `tests/test_train_determinism.py`: extended byte-identity check to cover the new artifact (DD-TEST-01).
+- `tests/fixtures/train/_regenerate.py` + `tests/fixtures/train/expected/`: regenerated to include the new artifact and the bumped `training_version` (DD-BWD-06).
+
+The 12 prediction parquets in the fixture are byte-identical to the pre-amendment fixture — confirming DD-LC-08 / TR-LC-08 hold at the fixture level. Only the manifest changed (new SHA entry + version bump) and the new loss-curve parquet appeared.
+
+The downstream Phase 5 ripple (fixture regen, source-hash re-pin) is plan-phase 3 of the Phase 6 plan.
+
+---
+
 ## After Phase 6
 
 Phase 4 is complete when:

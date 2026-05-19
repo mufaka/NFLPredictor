@@ -31,9 +31,12 @@ from .manifest import (
     write_training_manifest,
 )
 from .outputs import (
+    LOSS_CURVES_COLUMNS,
     PREDICTIONS_DIRNAME,
+    TRAINING_LOSS_CURVES_BASENAME,
     combination_filename,
     ensure_predictions_dir,
+    write_loss_curves,
     write_s1_predictions,
     write_s3_predictions,
 )
@@ -173,6 +176,52 @@ def _log_summary(line: str) -> None:
     print(line, file=sys.stdout, flush=True)
 
 
+def _collect_loss_curve_rows(
+    combo: Combination,
+    result: LearnedComboResult,
+    splits: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Flatten a learned combination's loss-curve records into parquet rows (DD-LC-01).
+
+    For S1 the single fold uses ``fold = 0``. For S3 each fold is tagged with
+    its expanding-window ``k`` value (6..14) drawn from the splits artifact,
+    matching Spec-Phase6 §4.1.
+    """
+    rows: list[dict[str, Any]] = []
+    if combo.strategy == "S1":
+        train_result = result.train_results[0]
+        for record in train_result.loss_curve:
+            rows.append({
+                "combination_id": combo.manifest_key,
+                "fold": 0,
+                "epoch": record.epoch,
+                "train_loss": record.train_loss,
+                "val_loss": record.val_loss,
+                "val_mae": record.val_mae,
+            })
+        return rows
+
+    # S3 — train_results[i] aligns positionally with splits["S3"]["folds"][i].
+    folds = splits["S3"]["folds"]
+    if len(result.train_results) != len(folds):
+        raise RuntimeError(
+            f"S3 train_results count ({len(result.train_results)}) does not "
+            f"match S3 fold count ({len(folds)}) for combo {combo.manifest_key!r}"
+        )
+    for fold_entry, train_result in zip(folds, result.train_results):
+        k_value = int(fold_entry["k"])
+        for record in train_result.loss_curve:
+            rows.append({
+                "combination_id": combo.manifest_key,
+                "fold": k_value,
+                "epoch": record.epoch,
+                "train_loss": record.train_loss,
+                "val_loss": record.val_loss,
+                "val_mae": record.val_mae,
+            })
+    return rows
+
+
 def _run_one_combo(
     combo: Combination,
     *,
@@ -182,8 +231,12 @@ def _run_one_combo(
     splits: dict[str, Any],
     config: TrainingConfig,
     device: ResolvedDevice,
-) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Train + predict one combination; return (predictions_df, manifest_summary)."""
+) -> tuple[pd.DataFrame, dict[str, Any], list[dict[str, Any]]]:
+    """Train + predict one combination; return (predictions_df, manifest_summary, loss_curve_rows).
+
+    ``loss_curve_rows`` is empty for trivial rungs (DD-LC-01) and lists one
+    dict per (fold, epoch) for learned rungs.
+    """
     shape_for_features = "flat" if combo.is_trivial else combo.shape
     feature_df = features_by_shape[shape_for_features]
     labels_lookup = _build_labels_lookup(feature_df)
@@ -193,7 +246,7 @@ def _run_one_combo(
             preds = run_trivial_combo_s1(combo.rung, feature_df, splits)
             val_mae = _val_mae_from_predictions(preds, labels_lookup, slice_filter="val")
             summary = build_training_summary_s1(None, val_mae)
-            return preds, summary
+            return preds, summary, []
         else:
             preds = run_trivial_combo_s3(combo.rung, feature_df, splits)
             # Per-fold val MAE in the fold's order.
@@ -204,7 +257,7 @@ def _run_one_combo(
                 per_fold_mae.append(_val_mae_from_predictions(sub, labels_lookup))
             per_fold_results: list[Any] = [None] * len(per_fold_mae)
             summary = build_training_summary_s3(per_fold_results, per_fold_mae)
-            return preds, summary
+            return preds, summary, []
 
     # Learned rung
     classification = classifications_by_shape[combo.shape]
@@ -221,10 +274,12 @@ def _run_one_combo(
             mlp_hp=config.mlp,
             seed=config.seed,
             device=device,
+            labels_lookup=labels_lookup,
         )
         val_mae = _val_mae_from_predictions(result.predictions, labels_lookup, slice_filter="val")
         summary = build_training_summary_s1(result.train_results[0], val_mae)
-        return result.predictions, summary
+        loss_rows = _collect_loss_curve_rows(combo, result, splits)
+        return result.predictions, summary, loss_rows
 
     # S3
     result_s3: LearnedComboResult = run_learned_combo_s3(
@@ -237,6 +292,7 @@ def _run_one_combo(
         mlp_hp=config.mlp,
         seed=config.seed,
         device=device,
+        labels_lookup=labels_lookup,
     )
     per_fold_mae = []
     for fold in splits["S3"]["folds"]:
@@ -244,7 +300,8 @@ def _run_one_combo(
         sub = result_s3.predictions[result_s3.predictions["fold_index"] == fold_idx]
         per_fold_mae.append(_val_mae_from_predictions(sub, labels_lookup))
     summary = build_training_summary_s3(list(result_s3.train_results), per_fold_mae)
-    return result_s3.predictions, summary
+    loss_rows = _collect_loss_curve_rows(combo, result_s3, splits)
+    return result_s3.predictions, summary, loss_rows
 
 
 def run_training_build(
@@ -308,11 +365,12 @@ def run_training_build(
     combos = enumerate_combinations(config)
     _log_summary(f"enumerated {len(combos)} combinations:")
 
-    # 8. Dispatch per combination; collect predictions + summaries.
+    # 8. Dispatch per combination; collect predictions + summaries + loss-curve rows.
     out_dir = ensure_predictions_dir(processed_dir)
     training_summaries: dict[str, Any] = {}
+    loss_curve_rows: list[dict[str, Any]] = []
     for combo in combos:
-        predictions, summary = _run_one_combo(
+        predictions, summary, combo_loss_rows = _run_one_combo(
             combo,
             features_by_shape=features_by_shape,
             classifications_by_shape=classifications_by_shape,
@@ -331,7 +389,16 @@ def run_training_build(
             write_s3_predictions(predictions, out_path)
 
         training_summaries[combo.manifest_key] = summary
+        loss_curve_rows.extend(combo_loss_rows)
         _log_summary(_format_combo_log_line(combo, summary))
+
+    # 9b. Write the Phase 6 loss-curve sidecar parquet (DD-LC-02).
+    loss_curves_path = processed_dir / TRAINING_LOSS_CURVES_BASENAME
+    loss_curves_df = pd.DataFrame(loss_curve_rows, columns=list(LOSS_CURVES_COLUMNS))
+    write_loss_curves(loss_curves_df, loss_curves_path)
+    _log_summary(
+        f"wrote loss curves: {loss_curves_path} ({len(loss_curve_rows)} rows)"
+    )
 
     # 10. Compute output SHAs against the on-disk parquets.
     output_sha256: dict[str, str] = {}
@@ -340,6 +407,7 @@ def run_training_build(
         output_sha256[key] = compute_sha256(
             out_dir / combination_filename(combo.rung, combo.shape, combo.strategy)
         )
+    output_sha256[TRAINING_LOSS_CURVES_BASENAME] = compute_sha256(loss_curves_path)
 
     # 11. Build + write manifest LAST (TR-MAN-06).
     training_config_sha256 = compute_sha256(config_path)

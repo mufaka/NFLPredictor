@@ -167,6 +167,25 @@ def prepare_tensors(
 # --------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class EpochRecord:
+    """One row's worth of per-epoch loss-curve data (DD-LC-01, DD-LC-06).
+
+    ``train_loss`` is the mean of per-batch L1 losses across the epoch's
+    training batches; ``val_loss`` is the L1 loss over the full val slice
+    using the running model state at end-of-epoch; ``val_mae`` is the
+    Phase 5 headline formula evaluated on the same running model state.
+    For the v1 trainer's single-val-batch eval path, ``val_loss == val_mae``
+    numerically; the two columns are kept separate so the schema survives a
+    future multi-batch eval rewrite without a parquet break.
+    """
+
+    epoch: int
+    train_loss: float
+    val_loss: float
+    val_mae: float
+
+
 @dataclass
 class TrainingResult:
     """Per-(rung, shape, strategy) or per-fold training outcome."""
@@ -176,6 +195,7 @@ class TrainingResult:
     epochs_trained: int
     stopped_early: bool
     best_state_dict: dict[str, torch.Tensor]
+    loss_curve: tuple[EpochRecord, ...] = ()  # DD-LC-01: empty when capture is disabled.
 
 
 def _slice_batch(batch: TensorBatch, idx: torch.Tensor) -> tuple[
@@ -190,13 +210,50 @@ def _slice_batch(batch: TensorBatch, idx: torch.Tensor) -> tuple[
     )
 
 
-def _eval_val_mae(model: nn.Module, val: TensorBatch) -> float:
-    """Compute val MAE per TR-MAN-04: mean over the full ``(N, 2)`` absolute-error matrix."""
+def _eval_val(model: nn.Module, val: TensorBatch) -> tuple[torch.Tensor, float]:
+    """Forward + tensor-side MAE in one pass. Returns ``(pred, tensor_mae)``.
+
+    The tensor MAE is per TR-MAN-04 — a mean over the full ``(N, 2)`` absolute
+    error matrix — but interpreted against ``val.labels``, which is
+    column-ordered by ``classification.labels`` (alphabetical sort, so
+    ``("away_score", "home_score")``). The manifest's
+    ``training_summaries.val_mae`` field uses a different per-prediction
+    formula — see :func:`_val_mae_parquet_style` — so when surfacing
+    per-epoch ``val_mae`` for Phase 6's loss-curve sidecar we recompute under
+    that formula.
+    """
     model.eval()
     with torch.no_grad():
         pred = model(val.numeric, val.low_card, val.high_card)
         abs_err = (pred - val.labels).abs()
-    return float(abs_err.mean().item())
+    return pred, float(abs_err.mean().item())
+
+
+def _eval_val_mae(model: nn.Module, val: TensorBatch) -> float:
+    """Convenience wrapper around :func:`_eval_val` returning only the tensor MAE."""
+    _, mae = _eval_val(model, val)
+    return mae
+
+
+def _val_mae_parquet_style(
+    pred: torch.Tensor,
+    game_ids: tuple[str, ...],
+    labels_lookup: dict[str, tuple[float, float]],
+) -> float:
+    """Recompute val MAE under the manifest's per-prediction Python formula.
+
+    Mirrors ``pipeline._val_mae_from_predictions`` so the per-epoch ``val_mae``
+    row at ``epoch == best_epoch`` matches ``training_summaries.val_mae`` to
+    machine precision (DD-LC-07). ``labels_lookup`` is ``GameId → (home_score,
+    away_score)`` as the pipeline builds it.
+    """
+    pred_np = pred.detach().cpu().numpy()
+    abs_errs: list[float] = []
+    for i, gid in enumerate(game_ids):
+        true_h, true_a = labels_lookup[gid]
+        abs_errs.append(abs(float(pred_np[i, 0]) - true_h))
+        abs_errs.append(abs(float(pred_np[i, 1]) - true_a))
+    return float(sum(abs_errs) / len(abs_errs)) if abs_errs else float("nan")
 
 
 def _snapshot_state(model: nn.Module) -> dict[str, torch.Tensor]:
@@ -215,16 +272,36 @@ def train_learned_rung(
     early_stop_patience: int,
     seed: int,
     device: ResolvedDevice,
+    capture_loss_curve: bool = True,
+    val_labels_lookup: Optional[dict[str, tuple[float, float]]] = None,
 ) -> TrainingResult:
-    """Train ``model`` with Adam + L1Loss, early-stop on val MAE plateau (TR-TRAIN-01..05)."""
+    """Train ``model`` with Adam + L1Loss, early-stop on val MAE plateau (TR-TRAIN-01..05).
+
+    When ``capture_loss_curve`` is true (the default), the loop records one
+    :class:`EpochRecord` per completed epoch on ``TrainingResult.loss_curve``.
+    The capture is read-only: it consumes the per-batch ``loss`` value that
+    the optimizer already produces and reuses the forward pass ``_eval_val``
+    already runs; it draws no RNG, takes no optimizer step, and runs no
+    additional gradient computation (DD-LC-08).
+
+    ``val_labels_lookup`` — ``GameId → (home_score, away_score)`` — is the
+    same dict the pipeline uses to compute the manifest's
+    ``training_summaries.val_mae``. When provided, per-epoch ``val_mae`` is
+    recomputed under that Python-side formula so the row at
+    ``epoch == best_epoch`` matches the manifest to machine precision
+    (DD-LC-07). When omitted (e.g., the capture-is-read-only verification
+    test, DD-TEST-06), the loop falls back to the tensor-side MAE — fine
+    because that test does not compare values, only trajectory.
+    """
     model.to(device.torch_device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.L1Loss(reduction="mean")  # TR-MODEL-02
 
     n_train = train.n
+    loss_curve: list[EpochRecord] = []
 
     # Capture epoch-0 val MAE so an unlucky init still gets a baseline best.
-    best_val_mae = _eval_val_mae(model, val)
+    _, best_val_mae = _eval_val(model, val)
     best_epoch = 0
     best_state = _snapshot_state(model)
     epochs_since_best = 0
@@ -236,6 +313,7 @@ def train_learned_rung(
         if device.name != "cpu":
             perm = perm.to(device.torch_device)
 
+        batch_losses: list[float] = []
         for start in range(0, n_train, batch_size):
             idx = perm[start:start + batch_size]
             num, low, high, y = _slice_batch(train, idx)
@@ -244,8 +322,34 @@ def train_learned_rung(
             loss = loss_fn(pred, y)
             loss.backward()
             optimizer.step()
+            if capture_loss_curve:
+                batch_losses.append(float(loss.detach().item()))
 
-        val_mae = _eval_val_mae(model, val)
+        # One forward pass at end of epoch — used for early stopping AND, when
+        # capturing, for the loss-curve row. Reusing the same pred keeps capture
+        # read-only with respect to optimizer state (DD-LC-08).
+        val_pred, val_tensor_mae = _eval_val(model, val)
+        val_mae = val_tensor_mae
+        if capture_loss_curve:
+            train_loss = (
+                float(sum(batch_losses) / len(batch_losses))
+                if batch_losses else float("nan")
+            )
+            if val_labels_lookup is not None:
+                val_mae_record = _val_mae_parquet_style(
+                    val_pred, val.game_ids, val_labels_lookup,
+                )
+            else:
+                val_mae_record = val_tensor_mae
+            loss_curve.append(
+                EpochRecord(
+                    epoch=epoch,
+                    train_loss=train_loss,
+                    val_loss=val_tensor_mae,
+                    val_mae=val_mae_record,
+                )
+            )
+
         if val_mae < best_val_mae:
             best_val_mae = val_mae
             best_epoch = epoch
@@ -260,6 +364,7 @@ def train_learned_rung(
                     epochs_trained=epoch,
                     stopped_early=True,
                     best_state_dict=best_state,
+                    loss_curve=tuple(loss_curve),
                 )
 
     return TrainingResult(
@@ -268,6 +373,7 @@ def train_learned_rung(
         epochs_trained=max_epochs,
         stopped_early=False,
         best_state_dict=best_state,
+        loss_curve=tuple(loss_curve),
     )
 
 

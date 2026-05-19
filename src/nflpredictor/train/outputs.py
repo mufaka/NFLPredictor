@@ -11,6 +11,9 @@ import pyarrow.parquet as pq
 
 PREDICTIONS_DIRNAME: str = "predictions"
 
+# Phase 6 sidecar artifact (DD-LC-02). Lives at the top level of Data/processed/.
+TRAINING_LOSS_CURVES_BASENAME: str = "training_loss_curves.parquet"
+
 # Per TR-OUT-06: pyarrow writer with snappy compression and row_group_size=1024.
 PARQUET_COMPRESSION: str = "snappy"
 PARQUET_ROW_GROUP_SIZE: int = 1024
@@ -81,6 +84,43 @@ def write_s1_predictions(df: pd.DataFrame, path: pathlib.Path) -> None:
         "GameId": pa.array(ordered["GameId"].astype(str), type=pa.string()),
         "pred_home": pa.array(ordered["pred_home"].astype("float64"), type=pa.float64()),
         "pred_away": pa.array(ordered["pred_away"].astype("float64"), type=pa.float64()),
+    })
+    _write_parquet(table, path)
+
+
+LOSS_CURVES_COLUMNS: tuple[str, ...] = (
+    "combination_id", "fold", "epoch", "train_loss", "val_loss", "val_mae",
+)
+
+
+def write_loss_curves(df: pd.DataFrame, path: pathlib.Path) -> None:
+    """Write Phase 6's per-epoch loss-curve sidecar parquet (DD-LC-02 / §4.1).
+
+    Input ``df`` must have the six columns listed in :data:`LOSS_CURVES_COLUMNS`.
+    Rows are sorted lexicographically by ``(combination_id, fold, epoch)``
+    for byte-determinism. When ``df`` is empty (e.g., a config with only
+    trivial rungs) the writer still emits a parquet with the correct schema
+    and zero rows.
+    """
+    missing = set(LOSS_CURVES_COLUMNS) - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"loss-curve frame is missing required columns: {sorted(missing)}"
+        )
+
+    ordered = (
+        df.sort_values(
+            ["combination_id", "fold", "epoch"], kind="mergesort"
+        ).reset_index(drop=True)
+    )
+
+    table = pa.Table.from_pydict({
+        "combination_id": pa.array(ordered["combination_id"].astype(str), type=pa.string()),
+        "fold": pa.array(ordered["fold"].astype("int32"), type=pa.int32()),
+        "epoch": pa.array(ordered["epoch"].astype("int32"), type=pa.int32()),
+        "train_loss": pa.array(ordered["train_loss"].astype("float64"), type=pa.float64()),
+        "val_loss": pa.array(ordered["val_loss"].astype("float64"), type=pa.float64()),
+        "val_mae": pa.array(ordered["val_mae"].astype("float64"), type=pa.float64()),
     })
     _write_parquet(table, path)
 

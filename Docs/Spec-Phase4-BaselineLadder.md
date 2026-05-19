@@ -254,6 +254,21 @@ The default `training_config.yaml` shipped in the repo declares the following. E
 | TR-MAN-07 | The manifest shall be written with sorted keys and stable two-space indentation. Byte-identical inputs and a pinned PyTorch wheel shall produce byte-identical manifests modulo the timestamp. |
 | TR-MAN-08 | `training_config_sha256` shall be the SHA-256 of the raw `Data/raw/training_config.yaml` file bytes (not the parsed/normalized form). This mirrors Phases 1–3's source-hash discipline. |
 
+### 3.12 Per-Epoch Loss Curves (TR-LC)
+
+Added by the Phase 6 amendment (DD-LC-*). Crosses-references [Spec-Phase6-Documentation.md](Spec-Phase6-Documentation.md) §3.4. The capture is read-only with respect to optimization (DD-LC-08) — no requirement in §3.8 changes — but the build now emits one additional output file and one additional entry in `output_sha256`.
+
+| ID | Requirement |
+|----|-------------|
+| TR-LC-01 | For every learned combination × fold, the training loop shall capture `(epoch, train_loss, val_loss, val_mae)` per epoch. Trivial rungs (mean, team_mean) are closed-form and contribute zero rows. Cross-references DD-LC-01. |
+| TR-LC-02 | The captured rows shall be written to `Data/processed/training_loss_curves.parquet`, sorted lexicographically by `(combination_id, fold, epoch)`. Schema per Spec-Phase6 §4.1. Cross-references DD-LC-02. |
+| TR-LC-03 | `training_manifest.json`'s `output_sha256` object shall gain a new key `training_loss_curves.parquet` whose value is the SHA-256 hex digest of the new file. No new top-level manifest keys are added. The existing TR-MAN-01 / TR-OUT-* / TR-NF-* contracts apply to the new artifact unchanged in spirit. Cross-references DD-LC-03. |
+| TR-LC-04 | `training_version` is bumped from `"v1"` to `"v2"` to record the schema change. Cross-references DD-LC-04. |
+| TR-LC-05 | Per-device byte equality (same contract as TR-NF-01) applies to the new parquet. Cross-references DD-LC-05. |
+| TR-LC-06 | `train_loss` is the per-epoch mean of the L1 loss across the epoch's training batches. `val_loss` is the tensor-side L1 reduction on the full val slice (the value the trainer also uses for early stopping). `val_mae` is the per-prediction Python-side formula that matches `training_summaries.val_mae` to machine precision; this is the manifest-comparable column. Cross-references DD-LC-06. |
+| TR-LC-07 | The final-epoch `val_mae` row for each learned (combination, fold) shall equal the corresponding `training_summaries.val_mae` entry to ~1e-12 relative tolerance. In v1 with early stopping, the meaningful row is at `epoch == best_epoch`. Cross-references DD-LC-07. |
+| TR-LC-08 | The capture shall be optimizer-neutral: sample order, RNG draws, optimizer state, and the prediction parquets shall be byte-identical to a hypothetical run with capture disabled. Cross-references DD-LC-08. |
+
 ---
 
 ## 4. Data Model
@@ -501,6 +516,7 @@ Not applicable.
 
 The following are explicitly out of scope for Phase 4 v1 and recorded so they are not lost:
 
+- **Per-epoch loss-curve instrumentation.** *Landed via Phase 6 amendment (Spec-Phase6 DD-LC-*; this spec's §3.12 / TR-LC-*).* The training build now emits `Data/processed/training_loss_curves.parquet` alongside the prediction parquets; `training_version` bumped `"v1"` → `"v2"`. The optimizer trajectory and the prediction parquets are unchanged (DD-LC-08 / TR-LC-08).
 - **Rung 4 (attention over starter slots).** Adding a permutation-invariant set encoder over the 22 home + 22 away starter vectors becomes a Phase 4 amendment if Phase 5/6 error analysis indicates that rung 3 has plateaued and starter-set structure is the binding constraint. Requires either a third Phase 2 shape (`set`) or a model-side reshape from `flat`/`pos`.
 - **Re-training on `S1.train ∪ S1.val` before test scoring.** Currently the S1 test predictions Phase 4 emits come from a model trained only on `S1.train`. A follow-on amendment may add an optional re-train step that consumes `S1.train ∪ S1.val` and re-emits the test parquet rows.
 - **Hyperparameter search.** Optuna, grid sweeps, or a learning-rate finder would slot in as a follow-on amendment with a `training_version` bump. v1 carries fixed hyperparameters in the config.

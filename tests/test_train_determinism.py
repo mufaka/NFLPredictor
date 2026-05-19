@@ -8,7 +8,10 @@ import shutil
 
 import pytest
 
-from nflpredictor.train.outputs import PREDICTIONS_DIRNAME
+from nflpredictor.train.outputs import (
+    PREDICTIONS_DIRNAME,
+    TRAINING_LOSS_CURVES_BASENAME,
+)
 from nflpredictor.train.pipeline import (
     TRAINING_MANIFEST_BASENAME,
     run_training_build,
@@ -71,6 +74,12 @@ def test_two_runs_produce_byte_identical_outputs(tmp_path: pathlib.Path) -> None
         assert pa.read_bytes() == pb.read_bytes(), (
             f"prediction {pa.name} differs between two runs"
         )
+
+    # DD-TEST-01 / DD-NF-01: the Phase 6 loss-curve sidecar parquet is also
+    # byte-deterministic across runs under the same per-device contract.
+    loss_a = (run_a / TRAINING_LOSS_CURVES_BASENAME).read_bytes()
+    loss_b = (run_b / TRAINING_LOSS_CURVES_BASENAME).read_bytes()
+    assert loss_a == loss_b, "training_loss_curves.parquet differs between two runs"
 
     manifest_a = json.loads((run_a / TRAINING_MANIFEST_BASENAME).read_text())
     manifest_b = json.loads((run_b / TRAINING_MANIFEST_BASENAME).read_text())

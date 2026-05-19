@@ -122,6 +122,7 @@ def _train_and_predict(
     mlp_hp: MlpHyperparams,
     seed: int,
     device: ResolvedDevice,
+    val_labels_lookup: dict[str, tuple[float, float]] | None = None,
 ) -> tuple[TrainingResult, pd.DataFrame, pd.DataFrame | None]:
     """One full train-then-predict cycle for a learned rung.
 
@@ -149,6 +150,7 @@ def _train_and_predict(
         early_stop_patience=early_stop_patience,
         seed=seed,
         device=device,
+        val_labels_lookup=val_labels_lookup,
     )
 
     val_preds = predict_with(model, val_batch, state_dict=result.best_state_dict)
@@ -173,6 +175,7 @@ def run_learned_combo_s1(
     mlp_hp: MlpHyperparams,
     seed: int,
     device: ResolvedDevice,
+    labels_lookup: dict[str, tuple[float, float]] | None = None,
 ) -> LearnedComboResult:
     """Train on S1.train, predict on S1.val and S1.test (TR-STRAT-01)."""
     s1 = splits["S1"]
@@ -191,6 +194,7 @@ def run_learned_combo_s1(
         mlp_hp=mlp_hp,
         seed=seed,
         device=device,
+        val_labels_lookup=labels_lookup,
     )
     assert test_preds is not None
     val_long = val_preds.assign(slice="val")
@@ -212,6 +216,7 @@ def run_learned_combo_s3(
     mlp_hp: MlpHyperparams,
     seed: int,
     device: ResolvedDevice,
+    labels_lookup: dict[str, tuple[float, float]] | None = None,
 ) -> LearnedComboResult:
     """Train per fold on fold.train, predict on fold.val (TR-STRAT-02, TR-STRAT-03).
 
@@ -236,6 +241,7 @@ def run_learned_combo_s3(
             mlp_hp=mlp_hp,
             seed=seed,
             device=device,
+            val_labels_lookup=labels_lookup,
         )
         results.append(result)
         chunks.append(val_preds.assign(fold_index=fold_idx))

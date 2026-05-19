@@ -68,7 +68,10 @@ from nflpredictor.train.sources import (
     PHASE2_VOCAB_BASENAME,
     PHASE3_SPLITS_BASENAME,
 )
-from nflpredictor.train.outputs import PREDICTIONS_DIRNAME
+from nflpredictor.train.outputs import (
+    PREDICTIONS_DIRNAME,
+    TRAINING_LOSS_CURVES_BASENAME,
+)
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -182,10 +185,15 @@ def build_fixture() -> None:
         shutil.copy2(RAW_PHASE3 / name, working / name)
     run_training_build(RAW_CONFIG, working, repo_dir=REPO_ROOT)
 
-    # 7. Move expected outputs (12 parquets + manifest) into expected/.
+    # 7. Move expected outputs (12 prediction parquets + loss-curve sidecar + manifest) into expected/.
     (EXPECTED / PREDICTIONS_DIRNAME).mkdir(parents=True)
     for p in sorted((working / PREDICTIONS_DIRNAME).glob("*.parquet")):
         shutil.copy2(p, EXPECTED / PREDICTIONS_DIRNAME / p.name)
+    # Phase 6 sidecar (DD-LC-02).
+    shutil.copy2(
+        working / TRAINING_LOSS_CURVES_BASENAME,
+        EXPECTED / TRAINING_LOSS_CURVES_BASENAME,
+    )
     # Blank the build-run-specific fields in the manifest so byte-equality tests pin to the rest.
     manifest = json.loads((working / TRAINING_MANIFEST_BASENAME).read_text())
     manifest["build_timestamp_utc"] = "FIXTURE_TIMESTAMP"

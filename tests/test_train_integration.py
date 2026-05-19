@@ -8,7 +8,12 @@ import shutil
 
 import pytest
 
-from nflpredictor.train.outputs import PREDICTIONS_DIRNAME
+import hashlib
+
+from nflpredictor.train.outputs import (
+    PREDICTIONS_DIRNAME,
+    TRAINING_LOSS_CURVES_BASENAME,
+)
 from nflpredictor.train.pipeline import (
     TRAINING_MANIFEST_BASENAME,
     run_training_build,
@@ -88,3 +93,48 @@ def test_training_manifest_matches_expected(fixture_outputs: pathlib.Path) -> No
     actual["build_timestamp_utc"] = "FIXTURE_TIMESTAMP"
     actual["git_commit"] = "FIXTURE_GIT_COMMIT"
     assert actual == expected
+
+
+def test_loss_curves_parquet_is_byte_identical(
+    fixture_outputs: pathlib.Path,
+) -> None:
+    """DD-LC-05 / DD-NF-01: the loss-curve sidecar matches the checked-in fixture."""
+    actual = fixture_outputs / TRAINING_LOSS_CURVES_BASENAME
+    expected = FIXTURE_EXPECTED / TRAINING_LOSS_CURVES_BASENAME
+    assert actual.read_bytes() == expected.read_bytes(), (
+        "training_loss_curves.parquet diverged from the checked-in expected fixture"
+    )
+
+
+def test_manifest_records_loss_curves_sha_and_version_bump(
+    fixture_outputs: pathlib.Path,
+) -> None:
+    """DD-LC-03 / DD-LC-04 / DD-BWD-05(d,e): manifest tracks the new artifact.
+
+    Verifies:
+      (a) ``output_sha256["training_loss_curves.parquet"]`` is present and
+          matches the on-disk file's SHA-256.
+      (b) ``training_version`` was bumped — the fixture's recorded value is
+          something other than the pre-amendment ``"v1"``. The exact bumped
+          value is read from the fixture so this test does not pin the
+          version string itself (DD-LC-04 gives Phase 4 author discretion).
+    """
+    manifest = json.loads(
+        (fixture_outputs / TRAINING_MANIFEST_BASENAME).read_text()
+    )
+
+    output_sha256 = manifest["output_sha256"]
+    assert TRAINING_LOSS_CURVES_BASENAME in output_sha256, (
+        f"manifest output_sha256 is missing the new key "
+        f"{TRAINING_LOSS_CURVES_BASENAME!r}; got {sorted(output_sha256.keys())}"
+    )
+    on_disk = hashlib.sha256(
+        (fixture_outputs / TRAINING_LOSS_CURVES_BASENAME).read_bytes()
+    ).hexdigest()
+    assert output_sha256[TRAINING_LOSS_CURVES_BASENAME] == on_disk
+
+    # DD-LC-04: training_version differs from the pre-amendment "v1".
+    assert manifest["training_version"] != "v1", (
+        f"training_version was not bumped after the Phase 6 amendment "
+        f"(still {manifest['training_version']!r})"
+    )
