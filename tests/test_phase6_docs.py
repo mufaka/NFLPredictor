@@ -2,9 +2,10 @@
 
 DD-TEST-07: walkthrough export exists and is non-empty.
 DD-WT-02: the walkthrough has the six required top-level sections in order.
+DD-TEST-08: the reading-outputs guide has one entry per required artifact.
 
-Filled out incrementally across plan-phases 5–7; tests for plan-phases 6/7
-land alongside their respective deliverables.
+Filled out incrementally across plan-phases 5–7; the training-dynamics tests
+land alongside their deliverable in plan-phase 7.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ DOCS_DIR = REPO_ROOT / "Docs"
 
 WALKTHROUGH_PATH = DOCS_DIR / "Phase6-Walkthrough.md"
 WALKTHROUGH_NOTEBOOK = REPO_ROOT / "notebooks" / "phase6_walkthrough.ipynb"
+READING_OUTPUTS_PATH = DOCS_DIR / "Phase6-ReadingTheOutputs.md"
 
 # DD-WT-02: the six top-level sections required by Spec-Phase6 §3. These are
 # the exact ``## N. ...`` headers committed to the notebook; the regex is
@@ -61,3 +63,53 @@ def test_walkthrough_has_required_sections() -> None:
             f"(positions out of order)"
         )
         last_pos = match.start()
+
+
+# DD-RG-02: the 10 required artifact entries in the Reading-the-Outputs guide.
+# These are the exact ``### N. ...`` headers committed to the doc. Regex is
+# loose on the angle-bracket-encoded placeholders inside the plot filenames so
+# the test stays robust to "<...>" vs "&lt;...&gt;" HTML escaping.
+READING_OUTPUTS_ARTIFACT_PATTERNS = (
+    r"^### 1\. metrics_headline\.json\b",
+    r"^### 2\. breakdowns/by_team\.parquet\b",
+    r"^### 3\. breakdowns/by_week\.parquet\b",
+    r"^### 4\. breakdowns/by_home_away\.parquet\b",
+    r"^### 5\. breakdowns/by_surface\.parquet\b",
+    r"^### 6\. breakdowns/by_roof\.parquet\b",
+    r"^### 7\. plots/.+scatter\.png\b",
+    r"^### 8\. plots/.+residuals\.png\b",
+    r"^### 9\. plots/.+by_week\.png\b",
+    r"^### 10\. plots/ladder_summary__\{val,test,pooled\}\.png\b",
+)
+
+
+def test_reading_outputs_has_all_entries() -> None:
+    """DD-TEST-08: the 10 artifact section headers appear in order."""
+    assert READING_OUTPUTS_PATH.exists(), f"{READING_OUTPUTS_PATH} missing"
+    content = READING_OUTPUTS_PATH.read_text(encoding="utf-8")
+    last_pos = -1
+    for pattern in READING_OUTPUTS_ARTIFACT_PATTERNS:
+        match = re.search(pattern, content, flags=re.MULTILINE)
+        assert match is not None, (
+            f"{READING_OUTPUTS_PATH} missing required artifact entry "
+            f"matching pattern {pattern!r}"
+        )
+        assert match.start() > last_pos, (
+            f"artifact entry {pattern!r} appears before the previous entry "
+            f"(positions out of order)"
+        )
+        last_pos = match.start()
+
+
+def test_reading_outputs_has_required_sections() -> None:
+    """DD-RG-01 / DD-RG-05 / DD-RG-06: intro, cross-combinations, vocabulary."""
+    content = READING_OUTPUTS_PATH.read_text(encoding="utf-8")
+    assert re.search(r"^## How to use this document\b", content, flags=re.MULTILINE), (
+        "Reading-outputs guide missing 'How to use this document' section (DD-RG-01)"
+    )
+    assert re.search(r"^## How to read across combinations\b", content, flags=re.MULTILINE), (
+        "Reading-outputs guide missing 'How to read across combinations' section (DD-RG-05)"
+    )
+    assert re.search(r"^## Vocabulary\b", content, flags=re.MULTILINE), (
+        "Reading-outputs guide missing 'Vocabulary' appendix (DD-RG-06)"
+    )

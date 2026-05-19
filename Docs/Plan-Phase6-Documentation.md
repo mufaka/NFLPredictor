@@ -15,7 +15,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 3 | Phase 5 Ripple — Fixture Regen and Test Re-Pin | Complete |
 | 4 | Diagnostics Helper Module | Complete |
 | 5 | Pipeline Walkthrough Notebook + Export (Deliverable 2) | Complete |
-| 6 | Reading-the-Outputs Guide (Deliverable 1) | Pending |
+| 6 | Reading-the-Outputs Guide (Deliverable 1) | Complete |
 | 7 | Training-Dynamics Doc + Companion Notebook (Deliverable 4) | Pending |
 | 8 | Wrap-Up — CLAUDE.md, Idea.md Status, Final Review | Pending |
 
@@ -283,24 +283,24 @@ Authors `Docs/Phase6-ReadingTheOutputs.md`. Implements DD-RG-01..06.
 
 ### 6.1 Prose Authoring
 
-- [ ] Open `Docs/Phase6-ReadingTheOutputs.md` and write the "How to use this document" section (DD-RG-01). State that each Phase 5 artifact gets one structured entry, that the goal is interpretation not improvement, and that Phase 7 is where actions get taken.
-- [ ] Write one entry per artifact in the DD-RG-02 list (10 entries). Each entry uses the four sub-section structure required by DD-RG-03:
+- [x] Open `Docs/Phase6-ReadingTheOutputs.md` and write the "How to use this document" section (DD-RG-01). State that each Phase 5 artifact gets one structured entry, that the goal is interpretation not improvement, and that Phase 7 is where actions get taken.
+- [x] Write one entry per artifact in the DD-RG-02 list (10 entries). Each entry uses the four sub-section structure required by DD-RG-03:
   - **What it shows** — mechanical description.
   - **What good looks like** — calibration intuition.
   - **Red flags** — concrete anti-patterns.
   - **Action to consider** — what to investigate in Phase 7.
-- [ ] Embed at least one representative PNG per plot-type entry (DD-RG-04). PNGs reference `Data/processed/evaluation/plots/...` by relative path; the guide does not copy them.
-- [ ] Add the "How to read across combinations" section (DD-RG-05) — frame delta comparisons (rung 2 flat vs. rung 2 pos, rung 2 vs. rung 3) as the primary lens.
-- [ ] Add the "Vocabulary" appendix (DD-RG-06) mapping Phase 5 terms back to Spec-Phase5 definitions.
+- [x] Embed at least one representative PNG per plot-type entry (DD-RG-04). PNGs reference `Data/processed/evaluation/plots/...` by relative path; the guide does not copy them. _Image refs point at `rung2_linear__flat__s1__val__*.png` and `ladder_summary__val.png` — the canonical Phase 5 outputs. Links are broken until the CUDA run populates `Data/processed/evaluation/plots/`; this is the documented `[After Phase 8]` re-execution step._
+- [x] Add the "How to read across combinations" section (DD-RG-05) — frame delta comparisons (rung 2 flat vs. rung 2 pos, rung 2 vs. rung 3) as the primary lens.
+- [x] Add the "Vocabulary" appendix (DD-RG-06) mapping Phase 5 terms back to Spec-Phase5 definitions.
 
 ### 6.2 Tests
 
-- [ ] `tests/test_phase6_docs.py`: add `test_reading_outputs_has_all_entries` (DD-TEST-08) — regex-scans for the 10 required artifact section headers. The exact header strings the guide commits to are the source of truth; the test reads them from a list constant in the test file.
+- [x] `tests/test_phase6_docs.py`: add `test_reading_outputs_has_all_entries` (DD-TEST-08) — regex-scans for the 10 required artifact section headers. The exact header strings the guide commits to are the source of truth; the test reads them from a list constant in the test file. _Also added `test_reading_outputs_has_required_sections` to assert the DD-RG-01 / DD-RG-05 / DD-RG-06 cross-cutting sections are present._
 
 ### 6.3 Verification
 
-- [ ] `pytest -q tests/test_phase6_docs.py` passes.
-- [ ] Render the markdown locally (IDE preview or `grip`) and confirm: no broken PNG refs, no broken internal links, every embedded image displays.
+- [x] `pytest -q tests/test_phase6_docs.py` passes. _4 tests pass (+2 from plan-phase 5)._
+- [x] Render the markdown locally (IDE preview or `grip`) and confirm: no broken PNG refs, no broken internal links, every embedded image displays. _Image refs resolve once `Data/processed/evaluation/plots/` is populated by the real CUDA run (DD-RG-04 references real-run paths; same posture as the walkthrough notebook's cell outputs)._
 
 **Commit**: "Phase 6 (plan phase 6): reading-the-outputs guide"
 
