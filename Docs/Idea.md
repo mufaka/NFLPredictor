@@ -14,6 +14,20 @@ The project's arc is split into seven phases. Decisions made early in the docume
 6. **Error Analysis & Iteration** — diagnose where the model misses and decide whether to add Madden columns or change shape.
 7. **2025 Test (deferred)** — future aspiration if 2025 data becomes available; out of scope for this iteration.
 
+### Project Status
+
+| Phase | Description | Entry point | Status |
+|-------|-------------|-------------|--------|
+| 1 | Data Build | `python -m nflpredictor.databuild` | Implementation complete (2026-05-17) |
+| 2 | Feature Engineering & Model Inputs | `python -m nflpredictor.features` | Implementation complete (2026-05-18) |
+| 3 | Splits | `python -m nflpredictor.splits` | Implementation complete (2026-05-18) |
+| 4 | Baseline & Model Ladder | `python -m nflpredictor.train` | Implementation complete (2026-05-18); real-data run pending on the CUDA machine |
+| 5 | Evaluation | `python -m nflpredictor.evaluate` | Implementation complete (2026-05-18); real-data run pending behind Phase 4 |
+| 6 | Error Analysis & Iteration | — | Exploratory |
+| 7 | 2025 Test | — | Deferred — out of scope until 2025 data exists |
+
+Per-phase details (decisions, rationale, real-data run summaries) live in the `> **Status**` blockquotes at the head of each phase section below.
+
 The Data Build phase (Phase 1) is the most worked-out section; later phases are exploratory and intentionally lighter on commitments. Because this is a learning project, the document also surfaces *why* each option exists, so the choice can favor teaching value over pure expedience.
 
 ## Human-Provided Direction
