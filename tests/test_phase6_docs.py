@@ -3,9 +3,8 @@
 DD-TEST-07: walkthrough export exists and is non-empty.
 DD-WT-02: the walkthrough has the six required top-level sections in order.
 DD-TEST-08: the reading-outputs guide has one entry per required artifact.
-
-Filled out incrementally across plan-phases 5–7; the training-dynamics tests
-land alongside their deliverable in plan-phase 7.
+DD-TD-01: training-dynamics doc covers the six required topics in order.
+DD-TD-02: the training-dynamics companion notebook exists and is non-empty.
 """
 
 from __future__ import annotations
@@ -20,6 +19,8 @@ DOCS_DIR = REPO_ROOT / "Docs"
 WALKTHROUGH_PATH = DOCS_DIR / "Phase6-Walkthrough.md"
 WALKTHROUGH_NOTEBOOK = REPO_ROOT / "notebooks" / "phase6_walkthrough.ipynb"
 READING_OUTPUTS_PATH = DOCS_DIR / "Phase6-ReadingTheOutputs.md"
+TRAINING_DYNAMICS_PATH = DOCS_DIR / "Phase6-TrainingDynamics.md"
+TRAINING_DYNAMICS_NOTEBOOK = REPO_ROOT / "notebooks" / "phase6_training_dynamics.ipynb"
 
 # DD-WT-02: the six top-level sections required by Spec-Phase6 §3. These are
 # the exact ``## N. ...`` headers committed to the notebook; the regex is
@@ -112,4 +113,49 @@ def test_reading_outputs_has_required_sections() -> None:
     )
     assert re.search(r"^## Vocabulary\b", content, flags=re.MULTILINE), (
         "Reading-outputs guide missing 'Vocabulary' appendix (DD-RG-06)"
+    )
+
+
+# DD-TD-01: the six required topic headers in Phase6-TrainingDynamics.md.
+TRAINING_DYNAMICS_TOPIC_PATTERNS = (
+    r"^## 1\. The training loop in this project\b",
+    r"^## 2\. The loss function\b",
+    r"^## 3\. The optimizer and learning rate\b",
+    r"^## 4\. How \"done\" is decided today\b",
+    r"^## 5\. Reading the train.val gap\b",
+    r"^## 6\. Which knob to reach for\b",
+)
+
+
+def test_training_dynamics_has_required_topics() -> None:
+    """DD-TD-01: the six topic headers appear in order."""
+    assert TRAINING_DYNAMICS_PATH.exists(), f"{TRAINING_DYNAMICS_PATH} missing"
+    content = TRAINING_DYNAMICS_PATH.read_text(encoding="utf-8")
+    last_pos = -1
+    for pattern in TRAINING_DYNAMICS_TOPIC_PATTERNS:
+        match = re.search(pattern, content, flags=re.MULTILINE)
+        assert match is not None, (
+            f"{TRAINING_DYNAMICS_PATH} missing required topic header matching "
+            f"pattern {pattern!r}"
+        )
+        assert match.start() > last_pos, (
+            f"topic {pattern!r} appears before the previous topic "
+            f"(positions out of order)"
+        )
+        last_pos = match.start()
+    # DD-TD-03: the "What is not covered" note must also be present.
+    assert re.search(r"^## What is \*not\* covered in Phase 6\b", content, flags=re.MULTILINE), (
+        "Training-dynamics doc missing 'What is *not* covered in Phase 6' section (DD-TD-03)"
+    )
+
+
+def test_training_dynamics_notebook_exists() -> None:
+    """DD-TD-02 (presence only — cell outputs are non-deterministic per DD-NF-04)."""
+    assert TRAINING_DYNAMICS_NOTEBOOK.exists(), f"{TRAINING_DYNAMICS_NOTEBOOK} missing"
+    # >50 KB is a sanity floor: a notebook with executed plot outputs is well
+    # above this; an empty stub would be ~1 KB.
+    size = TRAINING_DYNAMICS_NOTEBOOK.stat().st_size
+    assert size > 50_000, (
+        f"{TRAINING_DYNAMICS_NOTEBOOK} is suspiciously small ({size} bytes); "
+        f"check that the notebook was committed with executed cell outputs"
     )

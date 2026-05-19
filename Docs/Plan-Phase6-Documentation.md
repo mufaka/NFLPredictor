@@ -16,7 +16,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 4 | Diagnostics Helper Module | Complete |
 | 5 | Pipeline Walkthrough Notebook + Export (Deliverable 2) | Complete |
 | 6 | Reading-the-Outputs Guide (Deliverable 1) | Complete |
-| 7 | Training-Dynamics Doc + Companion Notebook (Deliverable 4) | Pending |
+| 7 | Training-Dynamics Doc + Companion Notebook (Deliverable 4) | Complete |
 | 8 | Wrap-Up — CLAUDE.md, Idea.md Status, Final Review | Pending |
 
 ---
@@ -312,33 +312,33 @@ Authors `Docs/Phase6-TrainingDynamics.md` and `notebooks/phase6_training_dynamic
 
 ### 7.1 Prose Authoring (`Docs/Phase6-TrainingDynamics.md`)
 
-- [ ] Write the doc covering the six topics required by DD-TD-01 in order:
+- [x] Write the doc covering the six topics required by DD-TD-01 in order:
   1. The training loop — epoch, batch, sample order (per-epoch shuffle, deterministic seed).
   2. The loss function — MAE/L1, why this choice.
   3. The optimizer and learning rate — Adam, fixed LR, no schedule.
-  4. How "done" is decided today — `max_epochs`, no early stopping, risks of each direction.
+  4. How "done" is decided today — `max_epochs`, no early stopping, risks of each direction. _**Spec drift:** DD-TD-01's "no early stopping" wording is stale relative to Phase 4's actual TR-TRAIN-04 contract and `train_loop.py`'s implementation, which uses `early_stop_patience: 20` and emits best-epoch params. Doc is written to match the **code** (truth-to-reader > truth-to-stale-spec). User should decide whether to amend the Phase 6 spec or leave the comment as-is; the doc itself does the right thing._
   5. Reading the train↔val gap — the four canonical patterns and their interpretations.
   6. Which knob to reach for — table mapping pattern → `training_config.yaml` field.
-- [ ] Add the "What is *not* covered in Phase 6" note (DD-TD-03) listing the Phase 7 items (attribution, ablation, per-team error analysis).
+- [x] Add the "What is *not* covered in Phase 6" note (DD-TD-03) listing the Phase 7 items (attribution, ablation, per-team error analysis).
 
 ### 7.2 Companion Notebook
 
-- [ ] Create `notebooks/phase6_training_dynamics.ipynb`.
-- [ ] First code cell calls `nflpredictor.diagnostics.loss_curves.load_loss_curves()` to load the parquet.
-- [ ] Subsequent cells produce one annotated subplot per learned combination (DD-TD-02). For S3 combinations, show all 9 folds on the same subplot (faint lines + bold mean) or as a small multiple — author's call; document the choice in a markdown cell.
-- [ ] Annotate at least one combination's subplot with prose callouts pointing at notable inflections (e.g., "val loss flattens at epoch N — likely the underfit knob to reach for is `hidden_dim`").
-- [ ] Run all cells from a clean kernel. Commit the notebook with executed outputs per DD-WT-03's spirit (and DD-NF-03 — PNG outputs only).
+- [x] Create `notebooks/phase6_training_dynamics.ipynb`.
+- [x] First code cell calls `nflpredictor.diagnostics.loss_curves.load_loss_curves()` to load the parquet. _Reads from a staged composite of `tests/fixtures/train/expected/` (loss curves + manifest) so SHA verification works on the dev box; toggle `USE_FIXTURE = False` after the CUDA run to read `Data/processed/` directly._
+- [x] Subsequent cells produce one annotated subplot per learned combination (DD-TD-02). For S3 combinations, show all 9 folds on the same subplot (faint lines + bold mean) or as a small multiple — author's call; document the choice in a markdown cell. _Chose the 2×4 small-multiple grid (8 subplots, one per combination); S3 cells use faint per-fold lines plus a bold fold-mean overlay._
+- [x] Annotate at least one combination's subplot with prose callouts pointing at notable inflections (e.g., "val loss flattens at epoch N — likely the underfit knob to reach for is `hidden_dim`"). _`rung3_mlp__flat__s1` gets the annotation pass: best-epoch marker + two callouts pointing at the epoch-1 Adam-warm-up and the final-epoch "still descending?" question._
+- [x] Run all cells from a clean kernel. Commit the notebook with executed outputs per DD-WT-03's spirit (and DD-NF-03 — PNG outputs only). _Executed via `jupyter nbconvert --to notebook --execute --inplace`; final notebook is 486 KB (mostly inline PNGs)._
 
 ### 7.3 Tests
 
-- [ ] `tests/test_phase6_docs.py`: add `test_training_dynamics_has_required_topics` — regex-scans `Docs/Phase6-TrainingDynamics.md` for the six topic headers required by DD-TD-01.
-- [ ] `tests/test_phase6_docs.py`: add `test_training_dynamics_notebook_exists` — asserts the notebook file is present and non-empty (no content assertion; cell outputs are non-deterministic per DD-NF-04).
+- [x] `tests/test_phase6_docs.py`: add `test_training_dynamics_has_required_topics` — regex-scans `Docs/Phase6-TrainingDynamics.md` for the six topic headers required by DD-TD-01. _Also asserts the DD-TD-03 "What is *not* covered" section._
+- [x] `tests/test_phase6_docs.py`: add `test_training_dynamics_notebook_exists` — asserts the notebook file is present and non-empty (no content assertion; cell outputs are non-deterministic per DD-NF-04). _Asserts `>50 KB` size as a sanity floor — well above an empty stub, well below any plausible executed notebook with PNG outputs._
 
 ### 7.4 Verification
 
-- [ ] `pytest -q tests/test_phase6_docs.py` passes.
-- [ ] Render the markdown locally and confirm structure.
-- [ ] Open the notebook in JupyterLab or VS Code and confirm cell outputs display.
+- [x] `pytest -q tests/test_phase6_docs.py` passes. _6 tests pass (+2 from plan-phase 6)._
+- [x] Render the markdown locally and confirm structure.
+- [x] Open the notebook in JupyterLab or VS Code and confirm cell outputs display. _Verified at notebook-load time: 4 code cells, 2 contain PNG outputs (display_data), none contain error outputs._
 
 **Commit**: "Phase 6 (plan phase 7): training-dynamics doc + companion notebook"
 
