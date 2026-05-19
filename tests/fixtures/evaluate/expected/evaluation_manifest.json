@@ -1,0 +1,229 @@
+{
+  "build_timestamp_utc": "FIXTURE_TIMESTAMP",
+  "combination_ids": [
+    "rung0_mean__none__s1",
+    "rung0_mean__none__s3",
+    "rung1_team_mean__none__s1",
+    "rung1_team_mean__none__s3",
+    "rung2_linear__flat__s1",
+    "rung2_linear__flat__s3",
+    "rung2_linear__pos__s1",
+    "rung2_linear__pos__s3",
+    "rung3_mlp__flat__s1",
+    "rung3_mlp__flat__s3",
+    "rung3_mlp__pos__s1",
+    "rung3_mlp__pos__s3"
+  ],
+  "evaluation_config_sha256": "5c70aacf93a2b72d92ac95ec249a9795b6a20aea269815d7007e14acbef0dd82",
+  "evaluation_summary": {
+    "rung0_mean__none__s1": {
+      "test": 8.881944444444445,
+      "val": 7.090277777777779
+    },
+    "rung0_mean__none__s3": {
+      "mean_per_fold": 6.9672362359862365,
+      "per_fold": [
+        10.041666666666668,
+        7.5,
+        5.90625,
+        8.0,
+        5.549999999999999,
+        4.090909090909092,
+        3.208333333333334,
+        7.211538461538462,
+        11.196428571428571
+      ],
+      "pooled": 6.9672362359862365
+    },
+    "rung1_team_mean__none__s1": {
+      "test": 11.784722222222221,
+      "val": 6.322916666666667
+    },
+    "rung1_team_mean__none__s3": {
+      "mean_per_fold": 7.251909240450908,
+      "per_fold": [
+        10.958333333333334,
+        7.5,
+        5.140625,
+        9.694444444444445,
+        5.8999999999999995,
+        6.9393939393939394,
+        2.854166666666667,
+        5.548076923076923,
+        10.732142857142858
+      ],
+      "pooled": 7.251909240450908
+    },
+    "rung2_linear__flat__s1": {
+      "test": 8.362611611684164,
+      "val": 8.201387405395508
+    },
+    "rung2_linear__flat__s3": {
+      "mean_per_fold": 6.797568109300402,
+      "per_fold": [
+        14.28274917602539,
+        7.82101583480835,
+        4.445727586746216,
+        8.20402717590332,
+        2.8060073852539062,
+        5.423676013946533,
+        3.8130083084106445,
+        4.9988932609558105,
+        9.383008241653442
+      ],
+      "pooled": 6.797568109300402
+    },
+    "rung2_linear__pos__s1": {
+      "test": 10.273502985636393,
+      "val": 6.251528739929199
+    },
+    "rung2_linear__pos__s3": {
+      "mean_per_fold": 6.257680535316467,
+      "per_fold": [
+        11.686385154724121,
+        8.386088848114014,
+        4.343406677246094,
+        7.94697380065918,
+        4.195616245269775,
+        3.539569854736328,
+        4.64392614364624,
+        4.729734897613525,
+        6.847423195838928
+      ],
+      "pooled": 6.257680535316467
+    },
+    "rung3_mlp__flat__s1": {
+      "test": 8.674427509307861,
+      "val": 7.371089935302734
+    },
+    "rung3_mlp__flat__s3": {
+      "mean_per_fold": 6.8010200659434,
+      "per_fold": [
+        15.32377576828003,
+        8.5256667137146,
+        5.225451469421387,
+        7.218740463256836,
+        6.163107872009277,
+        3.710934638977051,
+        2.4857144355773926,
+        4.188468933105469,
+        8.36732029914856
+      ],
+      "pooled": 6.8010200659434
+    },
+    "rung3_mlp__pos__s1": {
+      "test": 8.427319526672363,
+      "val": 7.683345953623454
+    },
+    "rung3_mlp__pos__s3": {
+      "mean_per_fold": 5.9163196086883545,
+      "per_fold": [
+        12.598259449005127,
+        7.611924171447754,
+        3.621734619140625,
+        6.457756042480469,
+        3.655154228210449,
+        4.173506259918213,
+        2.1666297912597656,
+        4.8456711769104,
+        8.116240739822388
+      ],
+      "pooled": 5.9163196086883545
+    }
+  },
+  "evaluation_version": "v1",
+  "git_commit": "FIXTURE_GIT_COMMIT",
+  "headline_metric": "mae",
+  "matplotlib_version": "3.10.9",
+  "numpy_version": "2.4.5",
+  "output_sha256": {
+    "breakdowns/by_home_away.parquet": "0583c19edaa320e3c532f6580f3ad377660f2be726724de7135ce5f4056cb28e",
+    "breakdowns/by_roof.parquet": "008404aa4bb0120d99bd699c35af2deb8f9f06757e708400c0a9fd89e67e7bbd",
+    "breakdowns/by_surface.parquet": "e1443263c70c6efb5d3f89f27504b9f4b083aa8e95919ccedbf45f2b805a9c9c",
+    "breakdowns/by_team.parquet": "8a3ba0a97620984aa34901cf11045e2c18a293aa99498a843e2ce555ba9e3f63",
+    "breakdowns/by_week.parquet": "941e3b61fc54f73a24e42a7253abf8f3cf7bfda2574d63e5bacf512f0ca6c135",
+    "metrics_headline.json": "96f0656600dd467714bde4d8d52b5543ed61dee4dc78a0b16a83b9090ea1b8c7",
+    "plots/ladder_summary__pooled.png": "bbd87eed40bb5dfbd973b832fde2e9298868fbe1ebc69e7e1dbdd8dd9201400d",
+    "plots/ladder_summary__test.png": "81357518fe8e9f919999412f19af9896818de9ca2de68640e301936dc6026a26",
+    "plots/ladder_summary__val.png": "82055868e6b7f23f3f67f5768d2c1e2b8532f20af4629f057424bdead9d7fc86",
+    "plots/rung0_mean__none__s1__test__by_week.png": "252172127c331cff6ce9af0c325e941494d0d2b52a9a578f4928c7f5e26d504d",
+    "plots/rung0_mean__none__s1__test__residuals.png": "9dea3d65a45a391122c6ffde61babbbf67b9e6fa5848c78e8bd22b8a3abecbb1",
+    "plots/rung0_mean__none__s1__test__scatter.png": "1ccc54ff26c601b2096b9ba6a4bf9aeac872302b6f92480b04e4b5a7793f9b47",
+    "plots/rung0_mean__none__s1__val__by_week.png": "aef7d41c3dbfc8224c7f5700e5e312dd8bba4fb0c67900239ccfe5a7ef220437",
+    "plots/rung0_mean__none__s1__val__residuals.png": "8ff9e04cad378d3cb4e79485a0f12ffec6a8367584cd225af9aaaf1a55a1cc3e",
+    "plots/rung0_mean__none__s1__val__scatter.png": "835d9f42f02d7d77d9a6bd565af9f1038bbcf70d8c76c384d3c3df3fcd887a1b",
+    "plots/rung0_mean__none__s3__pooled__by_week.png": "c0fe84f000223b76c042a2777ba149f42b42f8bd77a90ca965fb861d875372e0",
+    "plots/rung0_mean__none__s3__pooled__residuals.png": "fe6181af4fb6f410018f4d6b1b578bd35a089521826fcf7ce48ffd261a612519",
+    "plots/rung0_mean__none__s3__pooled__scatter.png": "a9e65ed42837466d5daf26f39525856a1e89ec5bfaf6bb7fbd3438dcde586d16",
+    "plots/rung1_team_mean__none__s1__test__by_week.png": "0e1fd681d984a877e77734d4c8ab8286fe985c520fa35894b7f15a834099cbcf",
+    "plots/rung1_team_mean__none__s1__test__residuals.png": "ac82b2ed7d060850345c80c0e2be7d2600f4cf2f2f56b59f66e79088cd8997cc",
+    "plots/rung1_team_mean__none__s1__test__scatter.png": "4332129ad7a71b82158d36445aa8d13e00204e95b0786f3620482dfc56ebd4cf",
+    "plots/rung1_team_mean__none__s1__val__by_week.png": "c50add101cb8151185775e641f24d494034aefe5bdc135df32541cf93bf6ee92",
+    "plots/rung1_team_mean__none__s1__val__residuals.png": "b3cf22c9381a1319ab9c837040f0ac5077a87d42be5e157d4d7540c0bb140814",
+    "plots/rung1_team_mean__none__s1__val__scatter.png": "6922c9fdab8d5dd780b159cc6a50da44557a50aaa834bb1f0f027d00e217a0cf",
+    "plots/rung1_team_mean__none__s3__pooled__by_week.png": "810c7e4af63edc7445103890224512848e81a8d2a13a19e5d041f88fcd8c9381",
+    "plots/rung1_team_mean__none__s3__pooled__residuals.png": "904c661504d4949f389b08efefa7f691e943c36c9023bad5a06b1fff2e2e2448",
+    "plots/rung1_team_mean__none__s3__pooled__scatter.png": "29d51e02a67e56cb6105711aec9306ffacbb65fca20a395bec392a6ccafe8b79",
+    "plots/rung2_linear__flat__s1__test__by_week.png": "9294f6dda13dce1d25c2d95d25f2c2bf1f71e1e093dd0ec6722abc2bfa22fcef",
+    "plots/rung2_linear__flat__s1__test__residuals.png": "580a30bc88fe44bedd7548e4485f10db2b12e9883e93b344a052697586c99300",
+    "plots/rung2_linear__flat__s1__test__scatter.png": "7820329da27591c0205bb6d2287498df5659cfd781527ad111ebaa7508e1d704",
+    "plots/rung2_linear__flat__s1__val__by_week.png": "e2dd3f3cff8b5c5affd2e117752541c88014f6f57c447166fffb96bb930fc759",
+    "plots/rung2_linear__flat__s1__val__residuals.png": "a00962da33dc24ac594d8659003cdba829761f43eb67fd38faa88d7b074b1859",
+    "plots/rung2_linear__flat__s1__val__scatter.png": "163f95e8c89f944d22f47e8bd5eedb73ffa139480c52bf7bbc402a6aa75a2992",
+    "plots/rung2_linear__flat__s3__pooled__by_week.png": "162afa435091c5d5fabe1806565425637ef47cd65bab888feecabc72f7592ff4",
+    "plots/rung2_linear__flat__s3__pooled__residuals.png": "a1c80aa7adec413c1ba1684a6cafffc39eb7dfed752af2c74a72e9a9266a8915",
+    "plots/rung2_linear__flat__s3__pooled__scatter.png": "08ffd8f68411ccd0a4ba3ca59e1bc5f32e0120a4a9e7b7c6a5e143d272ab135a",
+    "plots/rung2_linear__pos__s1__test__by_week.png": "bce3da65eebbeecba2c01ccbc676237488e35dee1c978a54c5ca7c4db61cd3dc",
+    "plots/rung2_linear__pos__s1__test__residuals.png": "70711b062a68c5a528333578fb86fb63c0eb832b825c2ebafd899a72c8abb6f8",
+    "plots/rung2_linear__pos__s1__test__scatter.png": "87a21b1e786fd361d074c15445861f8439ab97d4aab9a2556d628b40c2470e6d",
+    "plots/rung2_linear__pos__s1__val__by_week.png": "9996463f6057335a1543fac39f6448e6ba024ab361e656edb14cc0208b206080",
+    "plots/rung2_linear__pos__s1__val__residuals.png": "f3df543b98665a2265908dff362d113e0726a189f4bb2ba864cb346fb91f57d6",
+    "plots/rung2_linear__pos__s1__val__scatter.png": "6878d2796ecdac15ed520cb27dcb942c6cc6ac7bbd4f6f464eb45a6dd29bd6a9",
+    "plots/rung2_linear__pos__s3__pooled__by_week.png": "44806ce2b671d96a502ae7ea6a1431fcc997ed456d4a9b8abb6d5e9e715dcb83",
+    "plots/rung2_linear__pos__s3__pooled__residuals.png": "0d70e3a4ef9b6afa9bd707fa151cdeff317caf767afc8cacdbf68f58ccd06f76",
+    "plots/rung2_linear__pos__s3__pooled__scatter.png": "61c8c398a44419fe883f2b2a03cc34b876d5e80facec002709e663122b163a6e",
+    "plots/rung3_mlp__flat__s1__test__by_week.png": "da609666b54792db00e50f77b00889241283e67b43424e14421c0c3fb2c853ab",
+    "plots/rung3_mlp__flat__s1__test__residuals.png": "07392685058b262b0dcc752e4505138beb9d54ded0a90f202ee6f437299b4c71",
+    "plots/rung3_mlp__flat__s1__test__scatter.png": "0b8113e20f297b0201036bd9248ba274939738f280285b018d810a397360d640",
+    "plots/rung3_mlp__flat__s1__val__by_week.png": "ce1f8888efda3729becc9257631ec76084786a7e3707add42b786d6f0462112e",
+    "plots/rung3_mlp__flat__s1__val__residuals.png": "00191cac58bd844e31b3a33752b0975811eff4d63a8d2a032086e8ef75de6a9a",
+    "plots/rung3_mlp__flat__s1__val__scatter.png": "d380045d59d3bd872cc729bca3c281caebcc2a0c64fbdca982f39fe53bfb2018",
+    "plots/rung3_mlp__flat__s3__pooled__by_week.png": "c0a35c48e56b5a5391d9af983c3eb2055b64eec38cb5d0d52c918d26a01fcf63",
+    "plots/rung3_mlp__flat__s3__pooled__residuals.png": "db42a073823419f6557ccb1ef44c26df11a522d8741a8d2b79aa706aa173e823",
+    "plots/rung3_mlp__flat__s3__pooled__scatter.png": "e75b4f43cfbaca2b9bfb08819d12dfb7fda1de89352365dc838ea1d3e8e59689",
+    "plots/rung3_mlp__pos__s1__test__by_week.png": "48852aecd67f475a5a74fea8f065146539d13209aa8d63aba1087c28d17183fb",
+    "plots/rung3_mlp__pos__s1__test__residuals.png": "f8b074b1b1dd1e5582861957a5f6bccddbb6f81567f45e3e6238e896cf0f30fa",
+    "plots/rung3_mlp__pos__s1__test__scatter.png": "bb1402e3b862ffda7396d4583d595bbfa22a226b392378a5b3900ef97c0e782c",
+    "plots/rung3_mlp__pos__s1__val__by_week.png": "f5644523ed5afe7356c059460123a8cd648b44ef22e2203be99ff91c9e0285f9",
+    "plots/rung3_mlp__pos__s1__val__residuals.png": "b87e83ca3ed8dd08c7f79a29fd2c5eec8ea8dfb668b9d2670298e7cbfc388ecf",
+    "plots/rung3_mlp__pos__s1__val__scatter.png": "136e437d9f7d23d74e61b5dbb65a5884ff8689c5866d030450baed202edd748a",
+    "plots/rung3_mlp__pos__s3__pooled__by_week.png": "bb3a7e061a45131a696b6c015a36a8bc23c3be27951c27fc008e3e7bec1c02e7",
+    "plots/rung3_mlp__pos__s3__pooled__residuals.png": "4b3296f57c06760e9fc82224a9b725743012632f3ee9c6c267aa68147650156d",
+    "plots/rung3_mlp__pos__s3__pooled__scatter.png": "dfed685ab92f53177a18d3da9249d11e2660aa462a984bb85f501119d3b98100"
+  },
+  "phase2_source_sha256": {
+    "Data/processed/feature_vocab.json": "21546b0a9d662023c87d0957a03b9b082a03835eb2d17aca143601921ebfcbaf",
+    "Data/processed/features_flat_2024.parquet": "747983ddb249a56c3281bc2ad0540e38e6c637d8087f0e65addcdf210a0bd8ff",
+    "Data/processed/features_pos_2024.parquet": "4eb6c17259f46a02b4a70f78ccd5d1b8a6ae65d61a34972ef0a6e919493ba4cd"
+  },
+  "phase3_source_sha256": {
+    "Data/processed/splits_2024.json": "92817291b01c5bcbb15b10feafe5c6fbdc5762f6bdbec36dcb3bb8a3fdef66ee"
+  },
+  "phase4_manifest_git_commit": "FIXTURE_GIT_COMMIT",
+  "phase4_source_sha256": {
+    "predictions/rung0_mean__none__s1.parquet": "219d1444e5c58ae05ffa7e792f37b3e438a378495653a531b911a08d08525924",
+    "predictions/rung0_mean__none__s3.parquet": "21f1711fa27e8496bdb89def19f45e1c4ce31e5e4522984344004c9e035868da",
+    "predictions/rung1_team_mean__none__s1.parquet": "17de0cce6f9f604d2c8bd2109d43cce404bdf4543fb8198e34da5b9a74f0702f",
+    "predictions/rung1_team_mean__none__s3.parquet": "5552c124e9e3cf0dd8a10ee3679eb352362dfaa6244454c005b79d7f104fc14d",
+    "predictions/rung2_linear__flat__s1.parquet": "a6ad40f7a6fc74e5f128af1cd89d68e1361693ec8a456574afad3a6b906096fc",
+    "predictions/rung2_linear__flat__s3.parquet": "de5b0c3c6d9191fb425d53b92a6faf13797a694dc1ba57aa3bcde518ff041df7",
+    "predictions/rung2_linear__pos__s1.parquet": "15e5fed3fb723789ed87642172b71c8254d5ef36141befe2974b266e4699ab42",
+    "predictions/rung2_linear__pos__s3.parquet": "5dd91778b88d00f772918246f5a14b857211cb2da0f174437f7756027107c566",
+    "predictions/rung3_mlp__flat__s1.parquet": "1e1e22616d991118a90dee5bf518a0902de8be9d9606e71f55fb38377e1db258",
+    "predictions/rung3_mlp__flat__s3.parquet": "b04d28b4ceb9bd5f2a9061b27b6ada9788ef24706a35c2d8407bfb7bdb1a197e",
+    "predictions/rung3_mlp__pos__s1.parquet": "10cecc1516af269cd482583152e8eb38d5f3dba79d9644d985e2fa79a7da7d48",
+    "predictions/rung3_mlp__pos__s3.parquet": "21a1042702ab2130b514df5a38a9db75f6b18f4a5529b6c7e4752d2882b8eda9",
+    "training_manifest.json": "fdbea2a9bbdb061e39bd3c62ecee647008adacc4447139fb049a28d3bc93eace"
+  },
+  "pyarrow_version": "24.0.0"
+}

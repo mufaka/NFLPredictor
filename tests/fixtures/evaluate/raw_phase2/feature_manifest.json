@@ -1,0 +1,10 @@
+{
+  "build_timestamp_utc": "fixture",
+  "git_commit": "fixture-phase2",
+  "normalization_version": "v1",
+  "output_sha256": {
+    "Data/processed/feature_vocab.json": "21546b0a9d662023c87d0957a03b9b082a03835eb2d17aca143601921ebfcbaf",
+    "Data/processed/features_flat_2024.parquet": "747983ddb249a56c3281bc2ad0540e38e6c637d8087f0e65addcdf210a0bd8ff",
+    "Data/processed/features_pos_2024.parquet": "4eb6c17259f46a02b4a70f78ccd5d1b8a6ae65d61a34972ef0a6e919493ba4cd"
+  }
+}

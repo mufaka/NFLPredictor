@@ -76,7 +76,29 @@ The encoder applies a +1 index bump so Phase 2's `NULL_SENTINEL = -1` lands in a
 
 The shipped `training_config.yaml` is the knob for the ladder — adjusting `rungs`, `shapes`, `strategies`, hyperparameters, embedding dims, or the device is a YAML edit; adding a new rung or output layout change requires a `training_version` bump.
 
-The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, the splits module is `src/nflpredictor/splits/`, and the training module is `src/nflpredictor/train/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, `Docs/Spec-Phase3-Splits.md`, `Docs/Plan-Phase4-BaselineLadder.md`, and `Docs/Spec-Phase4-BaselineLadder.md`.
+Phase 5 (Evaluation) is implemented. Run the evaluation build with:
+
+```bash
+source .venv/bin/activate
+python -m nflpredictor.evaluate
+```
+
+The build refuses to run unless every Phase 2 tracked output (`features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`), Phase 3's `splits_2024.json`, and every Phase 4 prediction parquet listed in `training_manifest.json → output_sha256` on disk match their upstream-manifest SHAs (EV-IN-06 / EV-IN-07 / EV-IN-08). It reads those outputs plus `Data/raw/evaluation_config.yaml` and emits **a headline JSON + 5 breakdown parquets + ~40 PNGs + an evaluation manifest** into `Data/processed/evaluation/`:
+
+- `metrics_headline.json` — full metric matrix per `(combination, slice)` cell; five metrics always computed (MAE / per-side RMSE / W-L accuracy / spread MAE / total MAE) regardless of `headline_metric`.
+- `breakdowns/<dim>.parquet` × 5 (toggleable) — `by_team` / `by_week` / `by_home_away` / `by_surface` / `by_roof`; each parquet is universe-complete (empty cells appear with `n_games == 0` and null metrics per EV-MET-09).
+- `plots/<combination_id>__<slice>__{scatter,residuals,by_week}.png` plus `plots/ladder_summary__{val,test,pooled}.png` — Agg-backend matplotlib renders with the `Software` + `Creation Time` PNG metadata stripped for byte-determinism.
+- `evaluation_manifest.json` — SHA-256 of every Phase 2 / Phase 3 / Phase 4 input, the config, and every output file; `matplotlib_version` + `numpy_version` + `pyarrow_version`; per-combination headline summary; git commits.
+
+The determinism contract is **split**: `metrics_headline.json`, every breakdown parquet, and the manifest (modulo `build_timestamp_utc`) are byte-deterministic given pinned inputs (EV-NF-01) — re-running on the same machine with the same pinned matplotlib wheel produces byte-identical metric outputs. PNG byte-identity holds only within the same pinned matplotlib wheel on the same platform (EV-NF-02); cross-version PNG byte-identity is not asserted and the manifest's `matplotlib_version` is the auditability lever.
+
+The headline-MAE formula (EV-MET-01) is identical to Phase 4's `TR-MAN-04`: `mean(|pred_home - true_home| + |pred_away - true_away|) / 2`. Cross-phase agreement is enforced by `tests/test_evaluate_cross_phase.py` (EV-TEST-08): Phase 5's val MAE for every S1 combination and per-fold MAE for every S3 combination match Phase 4's `training_summaries` values to ~1e-6 relative tolerance.
+
+`tests/test_evaluate_integration.py` and `tests/test_evaluate_determinism.py` enforce the byte-equality contracts against a synthetic 36-game fixture (regenerate with `python -m tests.fixtures.evaluate._regenerate`); the eval fixture reuses Phase 4's train fixture wholesale. `tests/test_evaluate_pipeline_run.py` runs against real Phase 2 + Phase 3 + Phase 4 outputs and skips when `Data/processed/predictions/` is empty (the real-data run is expected post-Phase 4 on the CUDA machine, not from CPU CI).
+
+The shipped `evaluation_config.yaml` is the knob for evaluation — toggling a breakdown, swapping the highlighted headline metric, adding/removing per-breakdown plots, or changing plot DPI/figsize is a YAML edit; adding a new metric or breakdown dimension or changing output layout requires an `evaluation_version` bump.
+
+The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, the splits module is `src/nflpredictor/splits/`, the training module is `src/nflpredictor/train/`, and the evaluation module is `src/nflpredictor/evaluate/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, `Docs/Spec-Phase3-Splits.md`, `Docs/Plan-Phase4-BaselineLadder.md`, `Docs/Spec-Phase4-BaselineLadder.md`, `Docs/Plan-Phase5-Evaluation.md`, and `Docs/Spec-Phase5-Evaluation.md`.
 
 ## Datasets
 

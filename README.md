@@ -1,6 +1,6 @@
 # NFLPredictor
 
-NFL game outcome predictor — a learning project that builds a PyTorch model end-to-end on 2024 NFL data and applies it to 2025 once available. Phase 1 produces a normalized dataset joining 2024 box-score lineups to Madden NFL 24 player ratings; Phase 2 turns that into deterministic feature matrices ready for modeling; Phase 3 partitions the 2024 game universe into the train / val / test slices every downstream modeling phase binds to; Phase 4 trains the v1 PyTorch baseline ladder (mean → team-mean → `nn.Linear` → small MLP) against those splits and emits per-combination prediction parquets.
+NFL game outcome predictor — a learning project that builds a PyTorch model end-to-end on 2024 NFL data and applies it to 2025 once available. Phase 1 produces a normalized dataset joining 2024 box-score lineups to Madden NFL 24 player ratings; Phase 2 turns that into deterministic feature matrices ready for modeling; Phase 3 partitions the 2024 game universe into the train / val / test slices every downstream modeling phase binds to; Phase 4 trains the v1 PyTorch baseline ladder (mean → team-mean → `nn.Linear` → small MLP) against those splits and emits per-combination prediction parquets; Phase 5 reads those predictions plus Phase 2's labels and emits headline metrics, per-dimension breakdown tables, and calibration plot PNGs.
 
 ## Setup (first checkout)
 
@@ -81,6 +81,24 @@ The training build is **device-aware, single-device**: `device: "auto"` (the v1 
 
 `Data/raw/training_config.yaml` is the knob — adjusting rungs, shapes, strategies, hyperparameters, embedding dims, or the device is a YAML edit; a new rung or output layout change requires a `training_version` bump.
 
+### Phase 5 — evaluation
+
+```bash
+source .venv/bin/activate
+python -m nflpredictor.evaluate
+```
+
+Refuses to run unless every Phase 2 / Phase 3 output and every Phase 4 prediction parquet listed in `training_manifest.json` match their upstream-manifest SHAs. Reads those outputs plus `Data/raw/evaluation_config.yaml` and emits the metric surface into `Data/processed/evaluation/`:
+
+- `metrics_headline.json` — per `(combination, slice)` cell: MAE (headline), per-side MAE/RMSE, W-L accuracy, spread MAE, total MAE. Every metric always computed regardless of `headline_metric`.
+- `breakdowns/by_{team,week,home_away,surface,roof}.parquet` × 5 (toggleable) — universe-complete per-cell metric tables.
+- `plots/*.png` — predicted-vs-actual scatter and residual histogram per `(combination, slice)`, one ladder summary per slice basis, plus optional per-breakdown line/bar plots. Agg-backend matplotlib with PNG metadata stripped for byte determinism.
+- `evaluation_manifest.json` — provenance: SHA-256 of every upstream input, the config, and every output file; per-combination headline summary; `matplotlib_version` + `numpy_version` + `pyarrow_version`; git commits.
+
+The determinism contract is split: metric tables + manifest (modulo `build_timestamp_utc`) are byte-deterministic given pinned inputs; PNG byte-identity holds only within the same pinned matplotlib wheel on the same platform.
+
+`Data/raw/evaluation_config.yaml` is the knob — toggling a breakdown, swapping the highlighted headline metric, adding/removing per-breakdown plots, or changing plot DPI/figsize is a YAML edit; adding a new metric or breakdown dimension requires an `evaluation_version` bump.
+
 ## Tests
 
 ```bash
@@ -94,6 +112,7 @@ pytest -q
 - `src/nflpredictor/features/` — Phase 2 feature engineering pipeline
 - `src/nflpredictor/splits/` — Phase 3 split-assignment pipeline
 - `src/nflpredictor/train/` — Phase 4 baseline & model ladder
+- `src/nflpredictor/evaluate/` — Phase 5 evaluation (metrics, breakdowns, plots, manifest)
 - `Data/raw/` — checked-in source CSVs and config YAML (one per phase)
 - `Data/processed/` — build outputs (regenerated, not tracked)
-- `Docs/` — project overview, phase plans, specs (Phases 1–4 implementation-complete; Phases 5–7 still exploratory in `Idea.md`)
+- `Docs/` — project overview, phase plans, specs (Phases 1–5 implementation-complete; Phases 6–7 still exploratory in `Idea.md`)
