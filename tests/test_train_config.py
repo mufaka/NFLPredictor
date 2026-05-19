@@ -18,9 +18,20 @@ DEFAULT_CONFIG_PATH = REPO_ROOT / "Data" / "raw" / "training_config.yaml"
 
 # Mirrors the high-cardinality vocab keys from Data/processed/feature_vocab.json.
 # Keeping this static keeps the test independent of Phase 2 outputs.
-HIGH_CARD_KEYS = frozenset({
+_HIGH_CARD_KEYS: frozenset[str] = frozenset({
     "Archetype", "coaches", "officials", "positions", "stadium", "team_codes",
 })
+
+# Synthetic vocab: each high-card key has 9 entries (> default threshold of 8),
+# plus a couple of low-card keys for completeness. Used to drive the
+# load_training_config(path, vocab) signature without depending on Phase 2.
+VOCAB: dict[str, list[str]] = {
+    **{k: [f"{k}_{i}" for i in range(9)] for k in _HIGH_CARD_KEYS},
+    "roof": ["dome", "open", "retractable"],
+    "surface": ["grass", "turf"],
+    "day_of_week": ["Mon", "Thu", "Sun"],
+}
+HIGH_CARD_KEYS = _HIGH_CARD_KEYS  # kept for any callers reading the constant
 
 
 def _baseline() -> dict:
@@ -41,7 +52,7 @@ def _write(tmp_path: pathlib.Path, data: dict) -> pathlib.Path:
 # record the loss-curve schema change. The test asserts the string is the
 # checked-in non-empty value, not a specific name.
 def test_default_v1_config_accepts() -> None:
-    cfg = load_training_config(DEFAULT_CONFIG_PATH, HIGH_CARD_KEYS)
+    cfg = load_training_config(DEFAULT_CONFIG_PATH, VOCAB)
     assert isinstance(cfg.training_version, str) and cfg.training_version
     assert cfg.seed == 1729
     assert cfg.device == "auto"
@@ -58,7 +69,7 @@ def test_unknown_top_level_key_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data["surprise_key"] = 42
     with pytest.raises(TrainingConfigError, match="unknown top-level keys"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # (c) rungs = [] rejected
@@ -66,7 +77,7 @@ def test_empty_rungs_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data["rungs"] = []
     with pytest.raises(TrainingConfigError, match="rungs"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # (d) duplicate entry in rungs/shapes/strategies
@@ -84,7 +95,7 @@ def test_duplicate_in_list_rejected(
     data = _baseline()
     data[field] = bad_value
     with pytest.raises(TrainingConfigError, match="duplicate"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # (e) rungs entry outside the allowed set
@@ -92,7 +103,7 @@ def test_bad_rungs_entry_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data["rungs"] = ["mean", "rocket"]
     with pytest.raises(TrainingConfigError, match="rungs"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # (f) missing embedding_dims for a high-card categorical
@@ -103,7 +114,7 @@ def test_missing_embedding_dim_rejected(tmp_path: pathlib.Path) -> None:
         TrainingConfigError,
         match="embedding_dims is missing required high-cardinality vocab keys",
     ):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # (g) negative seed
@@ -111,7 +122,7 @@ def test_negative_seed_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data["seed"] = -1
     with pytest.raises(TrainingConfigError, match="seed must be non-negative"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # (h) unsupported mlp.activation
@@ -119,7 +130,7 @@ def test_bad_activation_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data["mlp"]["activation"] = "tanh"
     with pytest.raises(TrainingConfigError, match="mlp.activation"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # (i) device value outside the allowed set
@@ -128,7 +139,7 @@ def test_bad_device_rejected(tmp_path: pathlib.Path, bad_device: object) -> None
     data = _baseline()
     data["device"] = bad_device
     with pytest.raises(TrainingConfigError, match="device"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 # Additional spot-check rejections — not in TR-TEST-01 enumeration but cheap.
@@ -136,18 +147,18 @@ def test_missing_top_level_key_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data.pop("device")
     with pytest.raises(TrainingConfigError, match="missing required top-level keys"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 def test_bad_mlp_dropout_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data["mlp"]["dropout"] = 1.0
     with pytest.raises(TrainingConfigError, match="mlp.dropout"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)
 
 
 def test_nonpositive_lr_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
     data["linear"]["lr"] = 0
     with pytest.raises(TrainingConfigError, match="linear.lr"):
-        load_training_config(_write(tmp_path, data), HIGH_CARD_KEYS)
+        load_training_config(_write(tmp_path, data), VOCAB)

@@ -75,17 +75,16 @@ def explain_categorical(
     (i.e., it is numeric in Phase 4's classifier), or if ``raw_value`` is
     absent from that vocab.
     """
-    from nflpredictor.train.encoders import column_to_vocab_key
-
-    vocab = _load_vocab(processed_dir)
-    vocab_keys = frozenset(vocab.keys())
-    vocab_key = column_to_vocab_key(column, vocab_keys)
+    payload = _load_feature_vocab(processed_dir)
+    entries_by_key = payload["entries"]
+    column_vocab_keys = payload["column_vocab_keys"]
+    vocab_key = column_vocab_keys.get(column)
     if vocab_key is None:
         raise ValueError(
-            f"column {column!r} is not categorical under Phase 2's naming "
-            f"convention (no vocab key matches)"
+            f"column {column!r} is not categorical (not present in "
+            f"feature_vocab.json's column_vocab_keys map)"
         )
-    entries = vocab[vocab_key]
+    entries = entries_by_key[vocab_key]
     try:
         idx = entries.index(raw_value)
     except ValueError as exc:
@@ -106,6 +105,6 @@ def explain_categorical(
     }
 
 
-def _load_vocab(processed_dir: pathlib.Path) -> dict[str, list[str]]:
+def _load_feature_vocab(processed_dir: pathlib.Path) -> dict[str, Any]:
     with (processed_dir / FEATURE_VOCAB_BASENAME).open("r", encoding="utf-8") as f:
         return json.load(f)

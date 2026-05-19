@@ -46,13 +46,30 @@ def write_parquet(df: pd.DataFrame, path: pathlib.Path) -> None:
     )
 
 
-def write_vocab(vocab: Vocabulary, path: pathlib.Path) -> None:
+def write_vocab(
+    vocab: Vocabulary,
+    column_vocab_keys: dict[str, str],
+    vocab_version: str,
+    path: pathlib.Path,
+) -> None:
     """Write the vocabulary sidecar (FE-VOC-05).
+
+    Payload schema (``vocab_version: "v2"``):
+
+    - ``vocab_version`` — schema tag.
+    - ``entries`` — ``{vocab_key: [value, ...]}`` (sorted lexicographically per key).
+    - ``column_vocab_keys`` — ``{column_name: vocab_key}`` map covering every
+      categorical column across both flat and pos shapes. Phase 4's encoder
+      reads this directly instead of pattern-matching column names.
 
     ``newline="\\n"`` keeps the file byte-identical across OSes
     (Windows text-mode would otherwise translate ``\\n`` to ``\\r\\n``).
     """
-    payload = {key: list(values) for key, values in vocab.entries.items()}
+    payload = {
+        "vocab_version": vocab_version,
+        "entries": {key: list(values) for key, values in vocab.entries.items()},
+        "column_vocab_keys": dict(column_vocab_keys),
+    }
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(payload, f, sort_keys=True, indent=2)

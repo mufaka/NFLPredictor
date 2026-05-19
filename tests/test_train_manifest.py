@@ -45,6 +45,7 @@ def _config() -> TrainingConfig:
         training_version="v1",
         seed=1729,
         device="auto",
+        one_hot_threshold=8,
         rungs=("mean",),
         shapes=("flat",),
         strategies=("S1",),

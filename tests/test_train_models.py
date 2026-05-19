@@ -20,8 +20,9 @@ def _setup(d_in_target: int | None = None) -> tuple[FeatureEncoder, pd.DataFrame
     Returns (encoder, df, classification).
     """
     vocab = {"stadium": [f"s_{i}" for i in range(10)]}
+    column_vocab_keys = {"stadium": "stadium"}
     cols = ["GameId", "x", "stadium", "home_score", "away_score"]
-    cls = classify_columns(cols, vocab)
+    cls = classify_columns(cols, vocab, column_vocab_keys)
     enc = FeatureEncoder(cls, vocab, embedding_dims={"stadium": 4})
     # d_in = 1 numeric + 0 low-card + 4 (stadium embedding) = 5
     assert enc.d_in == 5

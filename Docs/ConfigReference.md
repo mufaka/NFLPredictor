@@ -110,8 +110,12 @@ madden_categorical_columns:
   - "Position"
 ```
 
-After saving, re-run `python -m nflpredictor.features` and the three downstream
-phases.
+After saving, re-run `python -m nflpredictor.features` and the three
+downstream phases. `Position` becomes a new vocab key in `feature_vocab.json`
+(distinct from the existing `positions` key, which is the box-score canonical
+taxonomy used by the `pos` shape). If its cardinality exceeds
+`one_hot_threshold`, add either `Position: <dim>` or rely on `_default` in
+`embedding_dims` — see the [`embedding_dims`](#embedding_dims-block) section.
 
 ---
 
@@ -141,19 +145,20 @@ must be kept in lockstep.
 
 ## `training_config.yaml`
 
-Top-level keys (all required):
+Top-level keys:
 
-| Key | Type | Notes |
-| --- | --- | --- |
-| `training_version` | non-empty string | Tag stamped into `training_manifest.json`. |
-| `seed` | non-negative int | Drives PyTorch / numpy / Python RNGs. |
-| `device` | string | `auto`, `cpu`, or `cuda`. `auto` → CUDA if available, else CPU. |
-| `rungs` | non-empty list | Subset of `[mean, team_mean, linear, mlp]`; duplicates rejected. |
-| `shapes` | non-empty list | Subset of `[flat, pos]`. |
-| `strategies` | non-empty list | Subset of `[S1, S3]`. |
-| `linear` | mapping | See below. |
-| `mlp` | mapping | See below. |
-| `embedding_dims` | mapping | See below. |
+| Key | Required | Type | Notes |
+| --- | --- | --- | --- |
+| `training_version` | yes | non-empty string | Tag stamped into `training_manifest.json`. |
+| `seed` | yes | non-negative int | Drives PyTorch / numpy / Python RNGs. |
+| `device` | yes | string | `auto`, `cpu`, or `cuda`. `auto` → CUDA if available, else CPU. |
+| `one_hot_threshold` | no (default 8) | positive int | Cardinality boundary for categorical encoding: vocab size ≤ this → one-hot; > this → learned embedding. |
+| `rungs` | yes | non-empty list | Subset of `[mean, team_mean, linear, mlp]`; duplicates rejected. |
+| `shapes` | yes | non-empty list | Subset of `[flat, pos]`. |
+| `strategies` | yes | non-empty list | Subset of `[S1, S3]`. |
+| `linear` | yes | mapping | See below. |
+| `mlp` | yes | mapping | See below. |
+| `embedding_dims` | yes | mapping | See below. |
 
 ### `linear` block (all keys required)
 
@@ -178,13 +183,17 @@ Top-level keys (all required):
 
 ### `embedding_dims` block
 
-Mapping of `vocab_key → embedding_dim` (positive int). The loader requires an
-entry for **every high-cardinality vocab key**, where "high-cardinality" means
-`vocab.size > 8` (`LOW_CARD_THRESHOLD = 8` in `train/encoders.py`). Vocab sizes
-are pulled live from `feature_vocab.json` at train time, so the required key set
-moves as the feature config changes.
+Mapping of `vocab_key → embedding_dim` (positive int) plus an optional
+`_default` fallback. The loader requires an entry for **every
+high-cardinality vocab key** — either an explicit `<key>: <dim>` entry or a
+`_default: <dim>` that covers any unspecified key. "High-cardinality" means
+`vocab.size > one_hot_threshold` (default 8); the threshold is configurable via
+the top-level `one_hot_threshold` knob. Vocab sizes are pulled live from
+`feature_vocab.json` at train time, so the required key set moves as the
+feature config changes.
 
-For the shipped feature config (Archetype + game-level defaults):
+For the shipped feature config (Archetype + game-level defaults), the
+high-cardinality vocab keys are:
 
 | Vocab key | Why it's high-card |
 | --- | --- |
@@ -195,10 +204,41 @@ For the shipped feature config (Archetype + game-level defaults):
 | `positions` | Canonical position taxonomy used by the `pos` shape. |
 | `stadium` | NFL stadiums (~32). |
 
-Low-card keys (one-hot encoded, no embedding row needed): `roof`, `surface`,
-`day_of_week`. Adding a Madden categorical column whose vocab grows past 8
-distinct values will cause Phase 4 to refuse to run until you add a matching
-`embedding_dims` entry — the error message names the missing key.
+Low-card keys (one-hot encoded, no embedding row needed under the default
+threshold): `roof`, `surface`, `day_of_week`. Any new Madden categorical
+column added via `feature_config.yaml` automatically becomes a new vocab key
+(named after the Madden column, e.g. `Position`, `College`). If its vocab
+grows past `one_hot_threshold`, the loader requires an embedding dim — pick
+between adding an explicit entry or relying on `_default`.
+
+Example with the fallback:
+
+```yaml
+embedding_dims:
+  _default:    8     # covers any new high-card vocab key automatically
+  Archetype:   16    # explicit overrides for keys that warrant more capacity
+  team_codes:   8
+```
+
+Without `_default`, the missing-key error names the offending vocab key:
+
+```
+TrainingConfigError: embedding_dims is missing required high-cardinality
+vocab keys: ['Position']; either add explicit entries or add a '_default'
+fallback.
+```
+
+**Why per vocab key, not per column?** A single `Archetype: 16` entry backs
+all 44 per-slot `_madden_archetype` columns — they share one `nn.Embedding`.
+The "Field General" archetype gets the same vector whether the column is
+`HomeOff01_madden_archetype` or `AwayDef07_madden_archetype`. Per-column
+embeddings would multiply parameter count without adding signal.
+
+**How does the encoder know which column maps to which vocab key?** Phase 2
+emits the `column_vocab_keys` map in `feature_vocab.json` (schema
+`vocab_version: "v2"`). Phase 4's encoder reads it directly — there are no
+hard-coded suffix rules on column names. Any new categorical column added via
+`feature_config.yaml` is routed automatically.
 
 ---
 

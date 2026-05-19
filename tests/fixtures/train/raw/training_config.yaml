@@ -1,6 +1,7 @@
-training_version: v2
+training_version: v3
 seed: 1729
 device: cpu
+one_hot_threshold: 8
 rungs:
 - mean
 - team_mean

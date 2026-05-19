@@ -54,7 +54,7 @@ def _linear_label_fixture() -> tuple[pd.DataFrame, pd.DataFrame, "object"]:
         "home_score": [20.0, 30.0, 40.0],
         "away_score": [15.0, 25.0, 35.0],
     })
-    cls = classify_columns(cols, vocab={})
+    cls = classify_columns(cols, vocab={}, column_vocab_keys={})
     return train, val, cls
 
 
@@ -256,6 +256,7 @@ def _make_config(rungs, shapes, strategies) -> TrainingConfig:
         training_version="v1",
         seed=1729,
         device="cpu",
+        one_hot_threshold=8,
         rungs=tuple(rungs),
         shapes=tuple(shapes),
         strategies=tuple(strategies),

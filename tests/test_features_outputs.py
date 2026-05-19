@@ -68,22 +68,32 @@ def test_write_vocab_sorted_keys_and_trailing_newline(tmp_path):
         "colors": ["red", "blue"],
         "animals": ["cat", "dog"],
     })
+    column_vocab_keys = {"pet_color": "colors", "household_pet": "animals"}
     path = tmp_path / "vocab.json"
-    write_vocab(vocab, path)
+    write_vocab(vocab, column_vocab_keys, "v2", path)
     content = path.read_text(encoding="utf-8")
     # Trailing newline (FE-VOC-05).
     assert content.endswith("\n")
-    # Sorted keys: 'animals' before 'colors'.
-    assert content.index("animals") < content.index("colors")
+    # Sorted top-level keys.
+    assert content.index("column_vocab_keys") < content.index("entries")
+    assert content.index("entries") < content.index("vocab_version")
+    # Sorted entries keys: 'animals' before 'colors'.
+    entries_block = content[content.index("entries"):]
+    assert entries_block.index("animals") < entries_block.index("colors")
 
     payload = json.loads(content)
-    assert payload == {"animals": ["cat", "dog"], "colors": ["blue", "red"]}
+    assert payload == {
+        "vocab_version": "v2",
+        "entries": {"animals": ["cat", "dog"], "colors": ["blue", "red"]},
+        "column_vocab_keys": {"pet_color": "colors", "household_pet": "animals"},
+    }
 
 
 def test_write_vocab_byte_identical_on_rerun(tmp_path):
     vocab = build_vocabulary({"colors": ["red", "blue", "green"]})
+    column_vocab_keys = {"primary_color": "colors"}
     p1 = tmp_path / "a.json"
     p2 = tmp_path / "b.json"
-    write_vocab(vocab, p1)
-    write_vocab(vocab, p2)
+    write_vocab(vocab, column_vocab_keys, "v2", p1)
+    write_vocab(vocab, column_vocab_keys, "v2", p2)
     assert p1.read_bytes() == p2.read_bytes()

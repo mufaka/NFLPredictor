@@ -153,16 +153,45 @@ def verify_strategy_availability(
         )
 
 
+def _load_feature_vocab(processed_dir: pathlib.Path) -> dict[str, Any]:
+    """Read the full ``feature_vocab.json`` payload (v2 schema).
+
+    Returns a dict with ``vocab_version``, ``entries``, and ``column_vocab_keys``.
+    """
+    payload = _load_json(processed_dir / PHASE2_VOCAB_BASENAME)
+    if "entries" not in payload or "column_vocab_keys" not in payload:
+        raise ValueError(
+            f"{PHASE2_VOCAB_BASENAME} is missing required keys for vocab_version v2; "
+            "re-run `python -m nflpredictor.features` to regenerate."
+        )
+    return payload
+
+
 def load_vocab(processed_dir: pathlib.Path) -> dict[str, list[str]]:
-    """Load feature_vocab.json (used both by config validation and the model layer)."""
-    return _load_json(processed_dir / PHASE2_VOCAB_BASENAME)
+    """Load the ``entries`` block from feature_vocab.json.
+
+    Preserves the original ``dict[vocab_key, [values...]]`` contract that
+    config validation, the model layer, and Phase 5's label lookups all expect.
+    """
+    return _load_feature_vocab(processed_dir)["entries"]
+
+
+def load_column_vocab_keys(processed_dir: pathlib.Path) -> dict[str, str]:
+    """Load the ``column_name → vocab_key`` map from feature_vocab.json.
+
+    Phase 4's encoder uses this map directly to route every categorical
+    column; new Madden categoricals just appear here and are routed without
+    any code change.
+    """
+    return _load_feature_vocab(processed_dir)["column_vocab_keys"]
 
 
 def high_card_vocab_keys(vocab: dict[str, list[str]], threshold: int = 8) -> frozenset[str]:
     """Vocab keys whose size exceeds ``threshold`` (TR-CAT-02 boundary).
 
-    Phase 4's spec fixes the boundary at 8 (``size > 8`` → embedding;
-    ``size <= 8`` → one-hot). The threshold parameter exists for testing.
+    The threshold is the configurable ``one_hot_threshold`` from
+    training_config.yaml (default 8). Vocabs with ``size <= threshold`` are
+    one-hot encoded; larger vocabs use learned embeddings.
     """
     return frozenset(k for k, values in vocab.items() if len(values) > threshold)
 

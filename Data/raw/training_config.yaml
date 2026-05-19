@@ -1,7 +1,9 @@
-training_version: "v2"
+training_version: "v3"
 
 seed: 1729
 device: "auto"   # one of "auto" | "cpu" | "cuda"
+
+one_hot_threshold: 8   # vocab size <= this → one-hot; > this → embedding
 
 rungs:      [mean, team_mean, linear, mlp]
 shapes:     [flat, pos]

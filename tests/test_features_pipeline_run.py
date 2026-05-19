@@ -71,7 +71,10 @@ def test_pos_parquet_shape(real_build):
 
 
 def test_vocab_keys_match_spec(real_build):
-    vocab = json.loads((real_build / FEATURE_VOCAB_BASENAME).read_text())
+    payload = json.loads((real_build / FEATURE_VOCAB_BASENAME).read_text())
+    assert set(payload.keys()) == {"vocab_version", "entries", "column_vocab_keys"}
+    assert payload["vocab_version"] == "v2"
+    entries = payload["entries"]
     # FE-VOC-03 keys for v1 default.
     expected_keys = {
         "Archetype",
@@ -84,10 +87,13 @@ def test_vocab_keys_match_spec(real_build):
         "officials",
         "positions",
     }
-    assert set(vocab.keys()) == expected_keys
+    assert set(entries.keys()) == expected_keys
     # Vocab values are lexicographically sorted (FE-VOC-04).
-    for key, values in vocab.items():
+    for key, values in entries.items():
         assert values == sorted(values), f"{key} not sorted"
+    # Every column in the column_vocab_keys map resolves to a known vocab key.
+    for col, vk in payload["column_vocab_keys"].items():
+        assert vk in expected_keys, f"{col!r} routes to unknown vocab key {vk!r}"
 
 
 def test_manifest_structure(real_build):
@@ -154,14 +160,14 @@ def test_mahomes_pinned_identity_pos(real_build):
 def test_vocab_decode_round_trip(real_build):
     """The integer codes in the parquet round-trip back to the original strings via the vocab."""
     flat = pq.read_table(real_build / FLAT_PARQUET_BASENAME).to_pandas()
-    vocab = json.loads((real_build / FEATURE_VOCAB_BASENAME).read_text())
+    entries = json.loads((real_build / FEATURE_VOCAB_BASENAME).read_text())["entries"]
     opener = flat[flat["GameId"] == "202409050kan"].iloc[0]
     # The Chiefs are the home team; verify the team_codes vocab decodes correctly.
     home_code = int(opener["home_team_code"])
-    assert vocab["team_codes"][home_code] == "kan"
+    assert entries["team_codes"][home_code] == "kan"
     # The opener is a Thursday game.
     dow_code = int(opener["day_of_week"])
-    assert vocab["day_of_week"][dow_code] == "Thursday"
+    assert entries["day_of_week"][dow_code] == "Thursday"
 
 
 def test_byte_identical_rerun(tmp_path):

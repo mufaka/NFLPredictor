@@ -102,6 +102,58 @@ _GAME_LEVEL_VOCAB_KEY: dict[str, str] = {
 }
 
 
+# feature_vocab.json schema tag — bumped when the JSON layout changes.
+VOCAB_VERSION = "v2"
+
+
+def build_column_vocab_keys(
+    config: FeatureConfig,
+    *,
+    has_officials: bool,
+) -> dict[str, str]:
+    """Compute the ``column_name → vocab_key`` map for both shapes (FE-VOC-07).
+
+    Phase 4's encoder reads this map directly, replacing the old pattern-match
+    on column-name suffixes. The map covers every categorical column across
+    both shapes:
+
+    - Game-level categoricals — only those toggled on in ``config.game_features.include``.
+    - Officials — ``official_*`` columns when ``has_officials`` is True.
+    - Per-slot Madden categoricals — for each Madden column in
+      ``madden_categorical_columns``, one entry per slot in both
+      ``CANONICAL_SLOTS`` (flat) and ``CANONICAL_BPOS_SLOTS`` (pos).
+    - Per-slot canonical positions — ``{slot}_position`` columns (flat only).
+
+    Numeric columns (Madden ratings, ``week``, ``days_rest_*``, ``_matched``,
+    ``_present``, weather floats, scores) deliberately do not appear here.
+    """
+    from .flat import snake_case
+    from .officials import OFFICIAL_COLUMN_NAMES
+
+    out: dict[str, str] = {}
+
+    for field in config.game_features.include:
+        key = _GAME_LEVEL_VOCAB_KEY.get(field)
+        if key is not None:
+            out[field] = key
+
+    if has_officials:
+        for col in OFFICIAL_COLUMN_NAMES:
+            out[col] = "officials"
+
+    for slot in CANONICAL_SLOTS:
+        out[f"{slot}_position"] = "positions"
+
+    for col in config.madden_categorical_columns:
+        snake = snake_case(col)
+        for slot in CANONICAL_SLOTS:
+            out[f"{slot}_madden_{snake}"] = col
+        for slot in CANONICAL_BPOS_SLOTS:
+            out[f"{slot}_madden_{snake}"] = col
+
+    return out
+
+
 def collect_observations(
     box_scores_df: pd.DataFrame,
     madden_df: pd.DataFrame,
@@ -333,8 +385,11 @@ def run_feature_build(
     else:
         pos_path.unlink(missing_ok=True)
 
+    column_vocab_keys = build_column_vocab_keys(
+        config, has_officials=officials_df is not None
+    )
     vocab_path = processed_dir / FEATURE_VOCAB_BASENAME
-    write_vocab(vocab, vocab_path)
+    write_vocab(vocab, column_vocab_keys, VOCAB_VERSION, vocab_path)
     feature_outputs[f"Data/processed/{FEATURE_VOCAB_BASENAME}"] = vocab_path
 
     print(

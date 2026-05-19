@@ -56,6 +56,7 @@ from .sources import (
     assert_label_parity,
     compute_sha256,
     high_card_vocab_keys,
+    load_column_vocab_keys,
     load_features,
     load_splits_artifact,
     load_vocab,
@@ -320,11 +321,13 @@ def run_training_build(
     phase2_manifest = verify_phase2_outputs(processed_dir)
     phase3_manifest = verify_phase3_outputs(processed_dir)
 
-    # 3. Load vocab; derive high-card keys; load training config (TR-IN-03, TR-CFG-01..10).
+    # 3. Load vocab + column→vocab map; load training config; derive high-card
+    #    keys using the parsed one_hot_threshold (TR-IN-03, TR-CFG-01..10).
     vocab = load_vocab(processed_dir)
-    high_card_keys = high_card_vocab_keys(vocab)
+    column_vocab_keys = load_column_vocab_keys(processed_dir)
     config_path = raw_dir / TRAINING_CONFIG_BASENAME
-    config = load_training_config(config_path, high_card_keys)
+    config = load_training_config(config_path, vocab)
+    high_card_keys = high_card_vocab_keys(vocab, threshold=config.one_hot_threshold)
 
     # 4. Resolve device (TR-CFG-10).
     device = resolve_device(config.device)
@@ -345,7 +348,12 @@ def run_training_build(
     assert_label_parity(features_by_shape["flat"], features_by_shape["pos"])
 
     classifications_by_shape: dict[str, ColumnClassification] = {
-        shape: classify_columns(list(features_by_shape[shape].columns), vocab)
+        shape: classify_columns(
+            list(features_by_shape[shape].columns),
+            vocab,
+            column_vocab_keys,
+            one_hot_threshold=config.one_hot_threshold,
+        )
         for shape in ("flat", "pos")
     }
 

@@ -29,8 +29,14 @@ LABEL_COLUMNS: tuple[str, ...] = ("home_score", "away_score")
 # GameId is the join key; never a feature.
 GAME_ID_COLUMN: str = "GameId"
 
-# Cardinality boundary for low-card vs high-card (TR-CAT-01 / TR-CAT-02).
+# Default cardinality boundary for low-card vs high-card; overridable via
+# training_config.yaml's ``one_hot_threshold`` (TR-CAT-01 / TR-CAT-02).
 LOW_CARD_THRESHOLD: int = 8
+
+# Reserved key in ``embedding_dims`` — applies to any high-card vocab key not
+# explicitly listed. Lets new Madden categoricals "just work" without a
+# training_config edit.
+DEFAULT_EMBEDDING_DIM_KEY: str = "_default"
 
 # Phase 2 emits -1 as a NULL_SENTINEL for legitimately-missing categorical cells
 # (e.g., a roster slot a team doesn't fill — features_pos has empty AwayWR4 for
@@ -41,37 +47,6 @@ LOW_CARD_THRESHOLD: int = 8
 # Embedding tables and one-hot widths are sized to ``vocab_size + 1`` to fit the
 # extra null slot. The null embedding is a learnable representation of "missing."
 NULL_BUMP: int = 1
-
-
-def column_to_vocab_key(col_name: str, vocab_keys: frozenset[str]) -> Optional[str]:
-    """Map a Phase 2 parquet column to a vocab key, or ``None`` if numeric.
-
-    The rules are derived from the Phase 2 column-naming convention:
-
-    - Exact match against a vocab key (``day_of_week``, ``roof``, ``surface``,
-      ``stadium``).
-    - Suffix ``_team_code`` → ``team_codes`` (``home_team_code``, ``away_team_code``).
-    - Suffix ``_coach`` → ``coaches`` (``home_coach``, ``away_coach``).
-    - Prefix ``official_`` → ``officials`` (the 7 ``official_*`` columns).
-    - Suffix ``_madden_archetype`` → ``Archetype`` (per-slot Madden columns).
-    - Suffix ``_position`` → ``positions`` (per-slot position columns, B-flat only).
-
-    Any other column is numeric. The rule set is pinned to v1 Phase 2 outputs;
-    column-naming changes in Phase 2 need a corresponding update here.
-    """
-    if col_name in vocab_keys:
-        return col_name
-    if col_name.endswith("_team_code") and "team_codes" in vocab_keys:
-        return "team_codes"
-    if col_name.endswith("_coach") and "coaches" in vocab_keys:
-        return "coaches"
-    if col_name.startswith("official_") and "officials" in vocab_keys:
-        return "officials"
-    if col_name.endswith("_madden_archetype") and "Archetype" in vocab_keys:
-        return "Archetype"
-    if col_name.endswith("_position") and "positions" in vocab_keys:
-        return "positions"
-    return None
 
 
 @dataclass(frozen=True)
@@ -95,9 +70,20 @@ class ColumnClassification:
 def classify_columns(
     feature_columns: list[str],
     vocab: Mapping[str, list[str]],
+    column_vocab_keys: Mapping[str, str],
+    one_hot_threshold: int = LOW_CARD_THRESHOLD,
 ) -> ColumnClassification:
-    """Partition a Phase 2 feature parquet's columns into the four roles (TR-CAT-01..06)."""
-    vocab_keys = frozenset(vocab.keys())
+    """Partition a Phase 2 feature parquet's columns into the four roles (TR-CAT-01..06).
+
+    ``column_vocab_keys`` is the data-driven routing map emitted by Phase 2 in
+    ``feature_vocab.json``. A column is categorical iff it appears in this map;
+    every other non-label, non-GameId column is numeric. This replaces the old
+    suffix-based pattern match, so any new categorical column added via
+    ``feature_config.yaml`` is routed automatically.
+
+    ``one_hot_threshold`` is the configurable cardinality boundary (default 8,
+    overridable via training_config's ``one_hot_threshold``).
+    """
     numeric: list[str] = []
     low: list[str] = []
     high: list[str] = []
@@ -110,13 +96,19 @@ def classify_columns(
         if col in LABEL_COLUMNS:
             labels.append(col)
             continue
-        vocab_key = column_to_vocab_key(col, vocab_keys)
+        vocab_key = column_vocab_keys.get(col)
         if vocab_key is None:
             numeric.append(col)
             continue
+        if vocab_key not in vocab:
+            raise KeyError(
+                f"column {col!r} routes to vocab key {vocab_key!r}, but that key "
+                f"is not in feature_vocab.json entries; "
+                f"available keys: {sorted(vocab.keys())}"
+            )
         column_vocab_key[col] = vocab_key
         size = len(vocab[vocab_key])
-        if size <= LOW_CARD_THRESHOLD:
+        if size <= one_hot_threshold:
             low.append(col)
         else:
             high.append(col)
@@ -165,15 +157,33 @@ class FeatureEncoder(nn.Module):
             classification.column_vocab_key[c] for c in classification.high_card_categorical
         }))
 
+        # Resolve embedding dim per vocab key once at construction time. Falls
+        # back to ``embedding_dims["_default"]`` when no explicit entry exists.
+        self._resolved_dims: dict[str, int] = {
+            key: self._resolve_embedding_dim(key)
+            for key in self._high_card_vocab_keys
+        }
+
         # One embedding per high-card vocab key, shared across all physical columns.
         # +1 entry for the null slot (NULL_SENTINEL = -1 bumped to 0).
         self.embeddings = nn.ModuleDict({
             key: nn.Embedding(
                 num_embeddings=self._vocab_sizes[key] + NULL_BUMP,
-                embedding_dim=self._embedding_dims[key],
+                embedding_dim=self._resolved_dims[key],
             )
             for key in self._high_card_vocab_keys
         })
+
+    def _resolve_embedding_dim(self, vocab_key: str) -> int:
+        if vocab_key in self._embedding_dims:
+            return self._embedding_dims[vocab_key]
+        if DEFAULT_EMBEDDING_DIM_KEY in self._embedding_dims:
+            return self._embedding_dims[DEFAULT_EMBEDDING_DIM_KEY]
+        raise KeyError(
+            f"embedding_dims has no entry for vocab key {vocab_key!r} and no "
+            f"{DEFAULT_EMBEDDING_DIM_KEY!r} fallback; "
+            "add one to training_config.yaml"
+        )
 
     @property
     def d_in(self) -> int:
@@ -188,7 +198,7 @@ class FeatureEncoder(nn.Module):
         for col in self.classification.low_card_categorical:
             width += self._vocab_sizes[self.classification.column_vocab_key[col]] + NULL_BUMP
         for col in self.classification.high_card_categorical:
-            width += self._embedding_dims[self.classification.column_vocab_key[col]]
+            width += self._resolved_dims[self.classification.column_vocab_key[col]]
         return width
 
     def forward(

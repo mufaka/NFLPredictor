@@ -102,7 +102,7 @@ A small mapping from diagnostic pattern to the field in `Data/raw/training_confi
 | Overfit (specific to MLP rung) | `mlp.early_stop_patience` ↓                      | If the MLP is overshooting its best epoch by a lot, tighten the patience so the snapshot is taken sooner.                            |
 | Optimization stuck             | `lr` ↑ (carefully) — then inspect feature inputs | Try doubling the LR; if curves still flat, the issue is upstream — verify Phase 2 features for the affected combination aren't degenerate. |
 | Underfit                       | `hidden_dim` ↑ *or* `embedding_dim` ↑            | More capacity. Note the embedding-dim per-vocab keys in `embedding_dims:` — each entry is a separate knob.                           |
-| Asymmetric home/away error     | (no training-config lever — Phase 2 issue)       | If the loss is symmetric but the per-side errors aren't, the input encoding has dropped a signal. Look at `column_to_vocab_key`.     |
+| Asymmetric home/away error     | (no training-config lever — Phase 2 issue)       | If the loss is symmetric but the per-side errors aren't, the input encoding has dropped a signal. Inspect `feature_vocab.json`'s `column_vocab_keys` map. |
 | S3 worse than S1 on the same combination | `seed` (try 2–3 values)                | Could be small-fold variance; if a re-seed flips the conclusion, the gap was noise. If it doesn't, the gap is real.                  |
 
 The table is intentionally **not exhaustive** — Phase 7 will deepen it. The current goal is to give you a starting point when you open `training_config.yaml`.

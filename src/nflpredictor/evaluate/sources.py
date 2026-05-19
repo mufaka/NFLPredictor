@@ -213,8 +213,18 @@ def load_features_pos(processed_dir: pathlib.Path) -> pd.DataFrame:
 
 
 def load_vocab(processed_dir: pathlib.Path) -> dict[str, list[str]]:
-    """Read ``feature_vocab.json`` (used for surface/roof/team label lookups)."""
-    return _load_json(processed_dir / PHASE2_VOCAB_BASENAME)
+    """Read the ``entries`` block of ``feature_vocab.json``.
+
+    Used for surface/roof/team label lookups. Phase 4's ``column_vocab_keys``
+    map is not needed here.
+    """
+    payload = _load_json(processed_dir / PHASE2_VOCAB_BASENAME)
+    if "entries" not in payload:
+        raise ValueError(
+            f"{PHASE2_VOCAB_BASENAME} is missing the 'entries' block "
+            "(vocab_version v2); re-run `python -m nflpredictor.features`."
+        )
+    return payload["entries"]
 
 
 def load_splits(processed_dir: pathlib.Path) -> dict[str, Any]:

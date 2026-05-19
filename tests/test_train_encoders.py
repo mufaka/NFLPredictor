@@ -14,12 +14,12 @@ from nflpredictor.train.encoders import (
     ColumnClassification,
     FeatureEncoder,
     classify_columns,
-    column_to_vocab_key,
     prepare_batch,
 )
 from nflpredictor.train.sources import (
     assert_label_parity,
     high_card_vocab_keys,
+    load_column_vocab_keys,
     load_features,
     load_vocab,
 )
@@ -52,6 +52,16 @@ def _synthetic_feature_columns() -> list[str]:
     ]
 
 
+def _synthetic_column_vocab_keys() -> dict[str, str]:
+    """Mirrors the column→vocab_key map Phase 2 emits for the synthetic columns."""
+    return {
+        "roof": "roof",
+        "stadium": "stadium",
+        "home_team_code": "team_codes",
+        "away_team_code": "team_codes",
+    }
+
+
 def _synthetic_df() -> pd.DataFrame:
     return pd.DataFrame({
         "GameId": ["G1", "G2", "G3", "G4", "G5"],
@@ -69,45 +79,61 @@ def _synthetic_df() -> pd.DataFrame:
 # ------------------------------ column routing ------------------------------
 
 
-def test_column_to_vocab_key_rules() -> None:
-    vk = frozenset({"day_of_week", "roof", "stadium", "team_codes", "coaches",
-                    "officials", "Archetype", "positions"})
-    assert column_to_vocab_key("day_of_week", vk) == "day_of_week"
-    assert column_to_vocab_key("roof", vk) == "roof"
-    assert column_to_vocab_key("home_team_code", vk) == "team_codes"
-    assert column_to_vocab_key("away_team_code", vk) == "team_codes"
-    assert column_to_vocab_key("home_coach", vk) == "coaches"
-    assert column_to_vocab_key("official_referee", vk) == "officials"
-    assert column_to_vocab_key("HomeOff01_madden_archetype", vk) == "Archetype"
-    assert column_to_vocab_key("HomeOff01_position", vk) == "positions"
-    # Numeric: not routed.
-    assert column_to_vocab_key("days_rest_home", vk) is None
-    assert column_to_vocab_key("week", vk) is None
-    assert column_to_vocab_key("HomeOff01_madden_overall_rating", vk) is None
-    assert column_to_vocab_key("HomeOff01_matched", vk) is None
-
-
-def test_classify_routes_by_threshold() -> None:
+def test_classify_uses_column_vocab_keys_map() -> None:
+    """classify_columns reads the data-driven column→vocab_key map (no suffix matching)."""
     vocab = _synthetic_vocab()
-    cls = classify_columns(_synthetic_feature_columns(), vocab)
-    # GameId dropped; labels split out; week + days_rest_home numeric.
+    cvk = _synthetic_column_vocab_keys()
+    cls = classify_columns(_synthetic_feature_columns(), vocab, cvk)
+    # GameId dropped; labels split out; week + days_rest_home numeric (absent from map).
     assert cls.numeric == ("days_rest_home", "week")
+    # roof has vocab size 4 → low-card. stadium=20, team_codes=12 → high-card.
     assert cls.low_card_categorical == ("roof",)
     assert sorted(cls.high_card_categorical) == ["away_team_code", "home_team_code", "stadium"]
     assert cls.labels == ("away_score", "home_score")
-    # Vocab routing for each cat column.
-    assert cls.column_vocab_key["roof"] == "roof"
-    assert cls.column_vocab_key["stadium"] == "stadium"
-    assert cls.column_vocab_key["home_team_code"] == "team_codes"
-    assert cls.column_vocab_key["away_team_code"] == "team_codes"
+    # Vocab routing comes from the map directly.
+    assert cls.column_vocab_key == cvk
+
+
+def test_classify_unknown_columns_become_numeric() -> None:
+    """A column absent from column_vocab_keys lands in numeric, never raises."""
+    vocab = _synthetic_vocab()
+    cvk = _synthetic_column_vocab_keys()
+    cols = _synthetic_feature_columns() + ["mystery_column", "another_numeric"]
+    cls = classify_columns(cols, vocab, cvk)
+    assert "mystery_column" in cls.numeric
+    assert "another_numeric" in cls.numeric
+
+
+def test_classify_threshold_is_configurable() -> None:
+    """one_hot_threshold flips a vocab from low-card to high-card or back."""
+    vocab = _synthetic_vocab()
+    cvk = _synthetic_column_vocab_keys()
+    # Default threshold 8: roof (size 4) is low-card.
+    cls_default = classify_columns(_synthetic_feature_columns(), vocab, cvk)
+    assert "roof" in cls_default.low_card_categorical
+    # Threshold 3: roof (size 4) becomes high-card.
+    cls_low_threshold = classify_columns(
+        _synthetic_feature_columns(), vocab, cvk, one_hot_threshold=3
+    )
+    assert "roof" in cls_low_threshold.high_card_categorical
+
+
+def test_classify_raises_when_map_points_to_missing_vocab_key() -> None:
+    """A column→vocab_key entry pointing at an absent vocab is a fail-fast bug."""
+    vocab = _synthetic_vocab()
+    cvk = {"roof": "roof", "phantom_col": "no_such_vocab_key"}
+    cols = _synthetic_feature_columns() + ["phantom_col"]
+    with pytest.raises(KeyError, match="no_such_vocab_key"):
+        classify_columns(cols, vocab, cvk)
 
 
 def test_classify_sort_order_is_independent_of_input_order() -> None:
     vocab = _synthetic_vocab()
+    cvk = _synthetic_column_vocab_keys()
     cols_a = _synthetic_feature_columns()
     cols_b = list(reversed(cols_a))
-    cls_a = classify_columns(cols_a, vocab)
-    cls_b = classify_columns(cols_b, vocab)
+    cls_a = classify_columns(cols_a, vocab, cvk)
+    cls_b = classify_columns(cols_b, vocab, cvk)
     assert cls_a == cls_b
 
 
@@ -120,7 +146,7 @@ def test_d_in_arithmetic() -> None:
     The +1 on each low-card one-hot is the NULL slot (see NULL_BUMP / TR-CAT-07).
     """
     vocab = _synthetic_vocab()
-    cls = classify_columns(_synthetic_feature_columns(), vocab)
+    cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
     emb_dims = {"stadium": 6, "team_codes": 4}
     enc = FeatureEncoder(cls, vocab, emb_dims)
     expected = (
@@ -139,7 +165,7 @@ def test_null_sentinel_lookup() -> None:
     For low-card: the one-hot has vocab_size+1 columns; idx=-1 bumps to 0.
     """
     vocab = _synthetic_vocab()
-    cls = classify_columns(_synthetic_feature_columns(), vocab)
+    cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
     enc = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
     df = pd.DataFrame({
         "GameId": ["null1", "null2"],
@@ -165,7 +191,7 @@ def test_null_bump_constant() -> None:
 
 def test_forward_shape() -> None:
     vocab = _synthetic_vocab()
-    cls = classify_columns(_synthetic_feature_columns(), vocab)
+    cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
     enc = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
     batch = prepare_batch(_synthetic_df(), cls)
     out = enc(batch["numeric"], batch["low_card"], batch["high_card"])
@@ -176,7 +202,7 @@ def test_forward_shape() -> None:
 def test_shared_embedding_across_columns_uses_same_table() -> None:
     """home_team_code and away_team_code share the team_codes embedding (TR-CAT-02 / sharing)."""
     vocab = _synthetic_vocab()
-    cls = classify_columns(_synthetic_feature_columns(), vocab)
+    cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
     enc = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
     # Only one nn.Embedding per high-card vocab key in use (not one per physical column).
     expected_keys = {"stadium", "team_codes"}
@@ -186,7 +212,7 @@ def test_shared_embedding_across_columns_uses_same_table() -> None:
 def test_seeded_init_is_reproducible() -> None:
     """Identical seeds produce identical embedding weights (TR-MODEL-05 default init + manual_seed)."""
     vocab = _synthetic_vocab()
-    cls = classify_columns(_synthetic_feature_columns(), vocab)
+    cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
 
     torch.manual_seed(1729)
     enc_a = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
@@ -208,8 +234,9 @@ def test_low_card_threshold_constant() -> None:
 
 def test_real_features_classify_as_expected_for_flat() -> None:
     vocab = load_vocab(REAL_PROCESSED)
+    cvk = load_column_vocab_keys(REAL_PROCESSED)
     flat = load_features(REAL_PROCESSED, "flat")
-    cls = classify_columns(list(flat.columns), vocab)
+    cls = classify_columns(list(flat.columns), vocab, cvk)
     # All low-card vocab keys (size ≤ 8) appear in low_card columns.
     assert set(cls.low_card_categorical) == {"day_of_week", "roof", "surface"}
     # High-card cols include all six high-card vocab keys.
@@ -222,8 +249,9 @@ def test_real_features_classify_as_expected_for_flat() -> None:
 def test_real_features_pos_lacks_positions_columns() -> None:
     """features_pos encodes position in column names, so the 'positions' vocab is unused."""
     vocab = load_vocab(REAL_PROCESSED)
+    cvk = load_column_vocab_keys(REAL_PROCESSED)
     pos = load_features(REAL_PROCESSED, "pos")
-    cls = classify_columns(list(pos.columns), vocab)
+    cls = classify_columns(list(pos.columns), vocab, cvk)
     high_card_keys_in_use = {cls.column_vocab_key[c] for c in cls.high_card_categorical}
     assert "positions" not in high_card_keys_in_use
     # The other 5 high-card vocabs are present.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Mapping
 
 import yaml
 
@@ -15,10 +15,14 @@ ALLOWED_STRATEGIES: frozenset[str] = frozenset({"S1", "S3"})
 ALLOWED_DEVICES: frozenset[str] = frozenset({"auto", "cpu", "cuda"})
 ALLOWED_ACTIVATIONS: frozenset[str] = frozenset({"gelu", "relu"})
 
+DEFAULT_ONE_HOT_THRESHOLD: int = 8
+DEFAULT_EMBEDDING_DIM_KEY: str = "_default"
+
 _TOP_LEVEL_KEYS: frozenset[str] = frozenset({
     "training_version",
     "seed",
     "device",
+    "one_hot_threshold",
     "rungs",
     "shapes",
     "strategies",
@@ -61,6 +65,7 @@ class TrainingConfig:
     training_version: str
     seed: int
     device: str
+    one_hot_threshold: int
     rungs: tuple[str, ...]
     shapes: tuple[str, ...]
     strategies: tuple[str, ...]
@@ -75,13 +80,15 @@ class TrainingConfigError(ValueError):
 
 def load_training_config(
     path: pathlib.Path,
-    high_card_vocab_keys: Iterable[str],
+    vocab: Mapping[str, list[str]],
 ) -> TrainingConfig:
     """Read, parse, and validate training_config.yaml (TR-IN-03, TR-IN-07, TR-CFG-01..10).
 
-    ``high_card_vocab_keys`` is the set of vocab keys with size > 8 (per
-    TR-CAT-02) that ``embedding_dims`` must cover. The caller computes this
-    from ``feature_vocab.json``.
+    ``vocab`` is the ``entries`` block from ``feature_vocab.json``. The loader
+    parses ``one_hot_threshold`` first (default 8), uses it to compute the
+    high-cardinality vocab key set, and then requires ``embedding_dims`` to
+    cover those keys — either with explicit per-key entries or via the
+    ``_default`` fallback.
     """
     if not path.exists():
         raise FileNotFoundError(f"training_config.yaml not found at {path}")
@@ -92,10 +99,10 @@ def load_training_config(
             f"training_config.yaml must be a mapping at the top level; "
             f"got {type(raw).__name__}"
         )
-    return _parse(raw, frozenset(high_card_vocab_keys))
+    return _parse(raw, vocab)
 
 
-def _parse(raw: dict[str, Any], required_embedding_keys: frozenset[str]) -> TrainingConfig:
+def _parse(raw: dict[str, Any], vocab: Mapping[str, list[str]]) -> TrainingConfig:
     unknown = set(raw.keys()) - _TOP_LEVEL_KEYS
     if unknown:
         raise TrainingConfigError(
@@ -112,10 +119,16 @@ def _parse(raw: dict[str, Any], required_embedding_keys: frozenset[str]) -> Trai
             f"missing required top-level keys: {sorted(missing)}"
         )
 
+    one_hot_threshold = _parse_one_hot_threshold(raw.get("one_hot_threshold"))
+    required_embedding_keys = frozenset(
+        k for k, values in vocab.items() if len(values) > one_hot_threshold
+    )
+
     return TrainingConfig(
         training_version=_parse_training_version(raw["training_version"]),
         seed=_parse_seed(raw["seed"]),
         device=_parse_device(raw["device"]),
+        one_hot_threshold=one_hot_threshold,
         rungs=_parse_enum_list("rungs", raw["rungs"], ALLOWED_RUNGS),
         shapes=_parse_enum_list("shapes", raw["shapes"], ALLOWED_SHAPES),
         strategies=_parse_enum_list("strategies", raw["strategies"], ALLOWED_STRATEGIES),
@@ -123,6 +136,20 @@ def _parse(raw: dict[str, Any], required_embedding_keys: frozenset[str]) -> Trai
         mlp=_parse_mlp(raw["mlp"]),
         embedding_dims=_parse_embedding_dims(raw["embedding_dims"], required_embedding_keys),
     )
+
+
+def _parse_one_hot_threshold(value: Any) -> int:
+    if value is None:
+        return DEFAULT_ONE_HOT_THRESHOLD
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TrainingConfigError(
+            f"one_hot_threshold must be an integer; got {value!r}"
+        )
+    if value < 1:
+        raise TrainingConfigError(
+            f"one_hot_threshold must be >= 1; got {value}"
+        )
+    return value
 
 
 def _parse_training_version(value: Any) -> str:
@@ -267,10 +294,15 @@ def _parse_embedding_dims(
                 f"embedding_dims[{key!r}] must be > 0; got {value}"
             )
         out[key] = value
+    # _default covers any high-card vocab key not listed explicitly. Without
+    # it, every required key needs its own entry.
+    if DEFAULT_EMBEDDING_DIM_KEY in out:
+        return out
     missing = required_keys - set(out.keys())
     if missing:
         raise TrainingConfigError(
             f"embedding_dims is missing required high-cardinality vocab keys: "
-            f"{sorted(missing)}"
+            f"{sorted(missing)}; either add explicit entries or add a "
+            f"{DEFAULT_EMBEDDING_DIM_KEY!r} fallback."
         )
     return out
