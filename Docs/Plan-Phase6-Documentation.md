@@ -17,7 +17,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 | 5 | Pipeline Walkthrough Notebook + Export (Deliverable 2) | Complete |
 | 6 | Reading-the-Outputs Guide (Deliverable 1) | Complete |
 | 7 | Training-Dynamics Doc + Companion Notebook (Deliverable 4) | Complete |
-| 8 | Wrap-Up — CLAUDE.md, Idea.md Status, Final Review | Pending |
+| 8 | Wrap-Up — CLAUDE.md, Idea.md Status, Final Review | Complete |
 
 ---
 
@@ -350,7 +350,7 @@ Closes the phase: updates the repo-level docs, marks Idea.md's status row comple
 
 ### 8.1 CLAUDE.md
 
-- [ ] Add a Phase 6 section to `CLAUDE.md` modeled on the existing Phase 1–5 sections. Include:
+- [x] Add a Phase 6 section to `CLAUDE.md` modeled on the existing Phase 1–5 sections. Include:
   - The new artifacts: `Data/processed/training_loss_curves.parquet`, the three `Phase6-*.md` files, the two notebooks.
   - The regen commands for each notebook (`jupyter nbconvert --to markdown ...`).
   - The note that `Docs/Phase6-Walkthrough.md` is generated — do not hand-edit.
@@ -359,20 +359,20 @@ Closes the phase: updates the repo-level docs, marks Idea.md's status row comple
 
 ### 8.2 Idea.md Status
 
-- [ ] Update `Docs/Idea.md`'s Project Status table row for Phase 6 from `Exploratory` to `Implementation complete (YYYY-MM-DD)`.
+- [x] Update `Docs/Idea.md`'s Project Status table row for Phase 6 from `Exploratory` to `Implementation complete (YYYY-MM-DD)`. _Set to `Implementation complete (2026-05-18); real-data refresh of notebook cell outputs pending behind Phase 4`._
 
 ### 8.3 Full-Suite Verification
 
-- [ ] `pytest -q` from `.venv` passes end-to-end.
-- [ ] `python -m nflpredictor.databuild && python -m nflpredictor.features && python -m nflpredictor.splits` still produce byte-identical outputs against the existing manifests (smoke check that Phase 6 hasn't accidentally rippled into Phases 1–3 contrary to DD-BWD-10).
+- [x] `pytest -q` from `.venv` passes end-to-end. _594 passed, 6 skipped in 49.72s._
+- [x] `python -m nflpredictor.databuild && python -m nflpredictor.features && python -m nflpredictor.splits` still produce byte-identical outputs against the existing manifests (smoke check that Phase 6 hasn't accidentally rippled into Phases 1–3 contrary to DD-BWD-10). _Confirmed: all 7 tracked Phase 1–3 outputs (`madden_2024.csv`, `box_scores_2024.csv`, `player_id_mapping.csv`, `features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`, `splits_2024.json`) byte-identical pre/post re-run; only manifests rotated their `build_timestamp_utc` fields (expected)._
 
 ### 8.4 Manual Review
 
-- [ ] Open `Docs/Phase6-ReadingTheOutputs.md`, `Docs/Phase6-Walkthrough.md`, and `Docs/Phase6-TrainingDynamics.md` in a markdown previewer. Confirm:
-  - All embedded PNGs resolve.
+- [x] Open `Docs/Phase6-ReadingTheOutputs.md`, `Docs/Phase6-Walkthrough.md`, and `Docs/Phase6-TrainingDynamics.md` in a markdown previewer. Confirm:
+  - All embedded PNGs resolve. _ReadingTheOutputs PNG refs intentionally point at `Data/processed/evaluation/plots/...` and will resolve only after the CUDA Phase 5 run — same posture as walkthrough cell outputs (documented in each doc's intro)._
   - All internal links resolve.
   - No leftover TODO markers, no obvious placeholder text.
-- [ ] Open both notebooks in JupyterLab or VS Code. Confirm cell outputs display and the narratives flow.
+- [x] Open both notebooks in JupyterLab or VS Code. Confirm cell outputs display and the narratives flow. _Walkthrough: 8 code cells, no error outputs, all sections render. Training-dynamics: 4 code cells, 2 contain inline PNG plots._
 
 ### 8.5 Commit
 

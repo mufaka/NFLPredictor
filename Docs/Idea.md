@@ -24,7 +24,7 @@ The project's arc is split into eight phases. Decisions made early in the docume
 | 3 | Splits | `python -m nflpredictor.splits` | Implementation complete (2026-05-18) |
 | 4 | Baseline & Model Ladder | `python -m nflpredictor.train` | Implementation complete (2026-05-18); real-data run pending on the CUDA machine |
 | 5 | Evaluation | `python -m nflpredictor.evaluate` | Implementation complete (2026-05-18); real-data run pending behind Phase 4 |
-| 6 | Documentation & Diagnostics | — | Exploratory |
+| 6 | Documentation & Diagnostics | — | Implementation complete (2026-05-18); real-data refresh of notebook cell outputs pending behind Phase 4 |
 | 7 | Error Analysis & Iteration | — | Exploratory |
 | 8 | 2025 Test | — | Deferred — out of scope until 2025 data exists |
 

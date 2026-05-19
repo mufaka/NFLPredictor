@@ -98,7 +98,38 @@ The headline-MAE formula (EV-MET-01) is identical to Phase 4's `TR-MAN-04`: `mea
 
 The shipped `evaluation_config.yaml` is the knob for evaluation — toggling a breakdown, swapping the highlighted headline metric, adding/removing per-breakdown plots, or changing plot DPI/figsize is a YAML edit; adding a new metric or breakdown dimension or changing output layout requires an `evaluation_version` bump.
 
-The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, the splits module is `src/nflpredictor/splits/`, the training module is `src/nflpredictor/train/`, and the evaluation module is `src/nflpredictor/evaluate/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, `Docs/Spec-Phase3-Splits.md`, `Docs/Plan-Phase4-BaselineLadder.md`, `Docs/Spec-Phase4-BaselineLadder.md`, `Docs/Plan-Phase5-Evaluation.md`, and `Docs/Spec-Phase5-Evaluation.md`.
+Phase 6 (Documentation & Diagnostics) is implemented. It is the project's first non-code-emitting phase — its deliverables are prose docs, two executed Jupyter notebooks, a diagnostics helper module, and one backward edit to Phase 4 (per-epoch loss-curve emission). No new build entry point; the deliverables are read directly.
+
+The four artifacts live in `Docs/` and `notebooks/`:
+
+- `Docs/Phase6-ReadingTheOutputs.md` — a field guide to every Phase 5 artifact. 10 structured entries (metrics JSON, five breakdown parquets, four plot families) each with four sub-sections: *What it shows*, *What good looks like*, *Red flags*, *Action to consider*. Plus "How to read across combinations" framing delta comparisons as the primary lens, plus a Vocabulary appendix.
+- `Docs/Phase6-Walkthrough.md` and `notebooks/phase6_walkthrough.ipynb` — a one-game pipeline trace (`202411280dal`, Dallas Cowboys Thanksgiving 2024, Week 13). Six sections walking the game from raw box-score row → Madden join → Phase 2 features → Phase 3 split assignment → Phase 4 predictions → Phase 5 breakdowns. The `.md` is the `jupyter nbconvert --to markdown` export of the notebook — **do not hand-edit**; re-run the notebook and re-export.
+- `Docs/Phase6-TrainingDynamics.md` and `notebooks/phase6_training_dynamics.ipynb` — a reader's guide to training: how the loop works, why MAE, Adam + fixed LR, early stopping mechanics, four canonical train↔val gap patterns, and a "first knob to reach for" table. The notebook loads `Data/processed/training_loss_curves.parquet` via `nflpredictor.diagnostics.loss_curves.load_loss_curves()` (SHA-verified against `training_manifest.json`) and renders one annotated subplot per learned combination.
+
+The backward edit to Phase 4 added `Data/processed/training_loss_curves.parquet` — a sidecar parquet with one row per `(combination_id, fold, epoch)` carrying `train_loss`, `val_loss`, `val_mae`. The new SHA lives in `training_manifest.json → output_sha256`; `training_version` bumped to `v2`. Per-device byte equality holds (same contract as the prediction parquets). The capture is read-only with respect to optimization — the prediction parquets are byte-identical to a no-capture baseline (DD-LC-08, enforced inside `tests/test_loss_curves.py`).
+
+The diagnostics helper module is `src/nflpredictor/diagnostics/` — three submodules called by the notebooks:
+
+- `trace.py` — per-game helpers: `load_raw_game(game_id)`, `resolve_starters(game_id)`, `lookup_split_membership(game_id)`, `lookup_predictions(game_id)`. Reads `Data/raw/box_scores_2024.csv`, `Data/processed/player_id_mapping.csv`, `Data/processed/splits_2024.json`, and every prediction parquet.
+- `encoding.py` — `encode_one_game_flat(game_id)`, `encode_one_game_pos(game_id)`, `explain_categorical(column, raw_value)` — walks one categorical column's raw → vocab key → integer code → routing chain. The integer code includes Phase 4's `NULL_BUMP = 1` so it matches what the encoder consumes (TR-CAT-07).
+- `loss_curves.py` — `load_loss_curves()`, `filter_curves()`. The loader verifies the parquet's SHA against `training_manifest.json → output_sha256["training_loss_curves.parquet"]` and raises `LossCurvesIntegrityError` on mismatch; pass `verify_sha=False` to skip (useful for hand-crafted fixtures).
+
+The notebooks are committed in their **executed state** — cell outputs are part of the source per DD-WT-03. Re-execution is the source of any update. The regen commands (single-line invocations to be added to a `Makefile` in a future tidy-up):
+
+```bash
+source .venv/bin/activate
+jupyter nbconvert --to notebook --execute --inplace notebooks/phase6_walkthrough.ipynb
+jupyter nbconvert --to markdown notebooks/phase6_walkthrough.ipynb --output ../Docs/Phase6-Walkthrough.md
+jupyter nbconvert --to notebook --execute --inplace notebooks/phase6_training_dynamics.ipynb
+```
+
+The walkthrough notebook is currently authored against the train+evaluate fixture under `tests/fixtures/evaluate/` so cells render real outputs on the CPU-only dev box. After the CUDA machine runs the real Phase 4 + Phase 5 pipeline (populating `Data/processed/predictions/` and `Data/processed/evaluation/`), re-point `PROCESSED_DIR` at `Data/processed/` and re-execute to refresh cell outputs with real numbers. Same posture applies to the training-dynamics notebook's `USE_FIXTURE = True` toggle.
+
+The new optional-dependency group is `[project.optional-dependencies] docs` in `pyproject.toml` — `jupyter` and `nbconvert`. Install with `pip install -e .[docs]`; the default `dev` group does not pull these.
+
+`tests/test_phase6_docs.py` carries six completeness checks: the walkthrough markdown exists and has the six DD-WT-02 section headers; the reading-outputs guide has 10 DD-RG-02 artifact entries and the three DD-RG-01/05/06 cross-cutting sections; the training-dynamics doc has the six DD-TD-01 topic headers plus the DD-TD-03 "What is not covered" note; the training-dynamics notebook is present and above the 50 KB sanity floor. `tests/test_diagnostics.py` covers the three diagnostics submodules. `tests/test_loss_curves.py` covers the Phase 4 backward edit's schema, sort order, integrity, and read-only-capture contract.
+
+The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, the splits module is `src/nflpredictor/splits/`, the training module is `src/nflpredictor/train/`, the evaluation module is `src/nflpredictor/evaluate/`, and the diagnostics module is `src/nflpredictor/diagnostics/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, `Docs/Spec-Phase3-Splits.md`, `Docs/Plan-Phase4-BaselineLadder.md`, `Docs/Spec-Phase4-BaselineLadder.md`, `Docs/Plan-Phase5-Evaluation.md`, `Docs/Spec-Phase5-Evaluation.md`, `Docs/Plan-Phase6-Documentation.md`, and `Docs/Spec-Phase6-Documentation.md`.
 
 ## Datasets
 
