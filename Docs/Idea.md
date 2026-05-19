@@ -4,15 +4,16 @@
 
 This is the umbrella idea document for the NFL Predictor project — a learning exercise in training a real-world model end-to-end with deliberate best practices for disparate data. It supersedes `Docs/Overview.md`.
 
-The project's arc is split into seven phases. Decisions made early in the document constrain later phases.
+The project's arc is split into eight phases. Decisions made early in the document constrain later phases.
 
 1. **Data Build** — produce processed training data from two disparate raw sources.
 2. **Feature Engineering & Model Inputs** — decide which columns the model actually sees, and how categorical signals are encoded.
 3. **Splits** — define a time-aware partition into train / validation / test.
 4. **Baseline & Model Ladder** — PyTorch-native progression from trivial baselines up to candidate models.
 5. **Evaluation** — score predictions and derive secondary metrics (W/L, spread, total).
-6. **Error Analysis & Iteration** — diagnose where the model misses and decide whether to add Madden columns or change shape.
-7. **2025 Test (deferred)** — future aspiration if 2025 data becomes available; out of scope for this iteration.
+6. **Documentation & Diagnostics** — turn the Phase 1–5 artifacts into a story a single developer can read; instrument Phase 4 with per-epoch loss curves.
+7. **Error Analysis & Iteration** — diagnose where the model misses and decide whether to add Madden columns or change shape.
+8. **2025 Test (deferred)** — future aspiration if 2025 data becomes available; out of scope for this iteration.
 
 ### Project Status
 
@@ -23,8 +24,9 @@ The project's arc is split into seven phases. Decisions made early in the docume
 | 3 | Splits | `python -m nflpredictor.splits` | Implementation complete (2026-05-18) |
 | 4 | Baseline & Model Ladder | `python -m nflpredictor.train` | Implementation complete (2026-05-18); real-data run pending on the CUDA machine |
 | 5 | Evaluation | `python -m nflpredictor.evaluate` | Implementation complete (2026-05-18); real-data run pending behind Phase 4 |
-| 6 | Error Analysis & Iteration | — | Exploratory |
-| 7 | 2025 Test | — | Deferred — out of scope until 2025 data exists |
+| 6 | Documentation & Diagnostics | — | Exploratory |
+| 7 | Error Analysis & Iteration | — | Exploratory |
+| 8 | 2025 Test | — | Deferred — out of scope until 2025 data exists |
 
 Per-phase details (decisions, rationale, real-data run summaries) live in the `> **Status**` blockquotes at the head of each phase section below.
 
@@ -289,7 +291,7 @@ Time-aware splits are not free. Naming the biases so error analysis stays honest
 ### Why we stick with it anyway
 
 1. **The evaluation we care about IS temporal generalization.** The question we're answering is "can the model predict games it didn't see, given a chronological gap from the games it did see." Shuffled validation removes the gap rather than measuring across it — that's a different question entirely.
-2. **The biases are diagnosable, not hidden.** Slice analysis (Phase 6) separates "model is wrong" from "model is wrong in the late-season regime specifically." Reading *deltas* across the baseline ladder (Phase 4) is more robust to validation-slice quirks than any single absolute metric.
+2. **The biases are diagnosable, not hidden.** Slice analysis (Phase 7) separates "model is wrong" from "model is wrong in the late-season regime specifically." Reading *deltas* across the baseline ladder (Phase 4) is more robust to validation-slice quirks than any single absolute metric.
 
 ### The chosen partition
 
@@ -344,7 +346,25 @@ Calibration plots:
 - Predicted score distribution vs. actual score distribution.
 - Error by week, by team, by home/away, by surface/roof.
 
-## Phase 6: Error Analysis & Iteration
+## Phase 6: Documentation & Diagnostics
+
+> **Status**: Exploratory.
+
+Phases 1–5 produce manifests, encoded feature matrices, splits, prediction parquets, and Phase 5 plots — but no instructions for *reading* them. Phase 6 closes that gap before any model iteration begins. Its goal is intuition, not better metrics: turn the existing artifacts into a story a single developer can read end-to-end, and surface the training-time vocabulary needed to make informed changes to `training_config.yaml`.
+
+Four artifacts ship:
+
+1. **Reading the outputs guide** (`Docs/Phase6-ReadingTheOutputs.md`) — prose plus embedded PNGs from a real Phase 5 run. For each plot type (scatter, residuals, by_week, ladder_summary) and each breakdown parquet (`by_team`, `by_week`, `by_home_away`, `by_surface`, `by_roof`), the guide answers: what does this show, what does a good version look like, what's a red flag, and what action does it suggest?
+
+2. **Pipeline walkthrough** (`notebooks/phase6_walkthrough.ipynb` + `Docs/Phase6-Walkthrough.md`) — pick one concrete game (e.g. `202409050kan`) and trace it end-to-end: raw box-score row → resolved `madden_id`s for all 44 starters → Phase 2's encoded feature vector with categorical → integer code → embedding lookup shown explicitly → which Phase 3 split bucket the game landed in → each rung's prediction → where the game appears on each Phase 5 plot. The notebook is interactive; the markdown is the prose narrative exported from it (single source of truth).
+
+3. **Per-epoch loss-curve instrumentation** — backward edit to Phase 4. The current `training_manifest.json` records only final val MAE per combination; Phase 6 extends it to log `(epoch, train_loss, val_loss, val_mae)` per rung × fold so training-dynamics analysis has artifacts to point at. Bumps `training_version` and requires a Phase 4 + Phase 5 re-run.
+
+4. **Training dynamics doc** (`Docs/Phase6-TrainingDynamics.md` + a small companion notebook) — covers what an epoch is and what a batch looks like in this pipeline, the current shuffling policy, learning rate, what "the model is done" means today (fixed `max_epochs`, no early stopping), how to read train↔val divergence, when to suspect underfitting vs. overfitting, and which knob to reach for in each case.
+
+The instrumentation policy is *minimal backward edits*: only Phase 4's per-epoch logging needs to change in an earlier phase (it genuinely cannot be reconstructed without training-time hooks). Per-game traces and everything else are reconstructed inside Phase 6 from artifacts the earlier phases already emit.
+
+## Phase 7: Error Analysis & Iteration
 
 > **Status**: Exploratory.
 
@@ -367,7 +387,7 @@ The iteration loop:
 
 Open question: how many iteration cycles before declaring the model frozen for the test-slice evaluation? Setting a soft cap (e.g., "5 feature-engineering cycles") prevents endless tinkering.
 
-## Phase 7: 2025 Test (deferred)
+## Phase 8: 2025 Test (deferred)
 
 > **Status**: Out of scope for the current iteration. The evaluation universe is 2024 only — see Phase 3. A future iteration may apply the frozen Phase 4 model to 2025 data if and when that dataset becomes available; nothing below is committed to.
 
@@ -478,11 +498,16 @@ Phase 1 is concrete enough to move to a specification. Later phases have intenti
 
 **Phase 5 (Evaluation)**: Resolved by `Docs/Spec-Phase5-Evaluation.md` — five regression metrics (MAE headline, per-side RMSE, W/L accuracy, spread MAE, total MAE) always computed; five breakdown dimensions (team/week/home-away/surface/roof) all on by default and individually toggleable; scatter, residual, and ladder-summary PNGs always on with per-week breakdown PNG on by default; every Phase 4 prediction parquet evaluated unconditionally on every run including S1.test (no opt-in flag); external benchmarks (Vegas closing lines and similar) declined for v1.
 
-**Phase 6 (Error Analysis)**:
+**Phase 6 (Documentation & Diagnostics)**:
+
+- Notebook execution: commit cell outputs or commit a clean notebook + rely on the markdown export for offline reading?
+- Per-epoch logging schema: inline list-of-dicts in `training_manifest.json` vs. a sidecar parquet keyed by `(combination_id, fold, epoch)`?
+
+**Phase 7 (Error Analysis)**:
 
 - Soft cap on iteration cycles before freezing the model?
 
-**Phase 7 (2025 Test, deferred)**:
+**Phase 8 (2025 Test, deferred)**:
 
 These items become live only if a future iteration brings 2025 data into scope. Recorded for traceability:
 

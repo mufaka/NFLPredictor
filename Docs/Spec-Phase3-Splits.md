@@ -315,7 +315,7 @@ The following are explicitly out of scope for Phase 3 v1 and recorded so they ar
 
 - **Multi-season splits.** When additional seasons exist as Phase 2 outputs, a `--season YYYY` flag or per-season config would extend the build. v1 stays 2024-only.
 - **Stratified or matchup-aware strategies.** Current strategies are pure-temporal. If error analysis surfaces team or matchup imbalance issues across folds, a follow-on strategy (e.g., enforce that each team appears in val at least once across S3 folds) becomes a Phase 3 amendment with a `splits_version` bump.
-- **Final-final backstop slice.** Currently not reserved. If model freezing (Phase 6) shows sensitivity to "validation contamination from heavy iteration," a small backstop slice could be carved out of train as a follow-on amendment.
+- **Final-final backstop slice.** Currently not reserved. If model freezing (Phase 7) shows sensitivity to "validation contamination from heavy iteration," a small backstop slice could be carved out of train as a follow-on amendment.
 - **Alternative S3 regimes.** Sliding-window CV (fixed train length, advancing window) and growing-fold CV (train and val both grow each fold) are alternative regimes. Out of scope for v1.
 - **2025 evaluation.** A future iteration may evaluate the frozen Phase 4 model against 2025 data if and when that dataset becomes available. That is a project-level future amendment, not a Phase 3 concern.
 

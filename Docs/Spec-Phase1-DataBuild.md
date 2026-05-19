@@ -377,7 +377,7 @@ Not applicable.
 
 The following are explicitly out of scope for Phase 1 and are recorded here so they are not lost:
 
-- **Madden 25 ingestion**: When the user transitions to a Madden 25 source, the build will need a vintage selector and a stability rule for `madden_id` continuity across vintages. The `YYYY-` prefix already encodes vintage; cross-vintage identity is a Phase 7 concern.
+- **Madden 25 ingestion**: When the user transitions to a Madden 25 source, the build will need a vintage selector and a stability rule for `madden_id` continuity across vintages. The `YYYY-` prefix already encodes vintage; cross-vintage identity is a Phase 8 concern.
 - **2025 box-scores ingestion**: The Phase 1 build will be invoked against a `Data/raw/box_scores_2025.csv` input when that data arrives from the user's separate application. The processed file would be emitted as `Data/processed/box_scores_2025.csv`. Multi-season support is a minor extension of the existing spec, not a fundamental change.
 - **Alternative ratings providers**: If Madden is replaced by another provider with the same 69-column shape, only Section 2's input file changes; the rest of the contract is provider-agnostic.
 - **Provenance for the fuzzy threshold**: The fuzzy-match threshold of `0.85` (DB-MATCH-05) is a chosen default. A future iteration may want to tune this against an empirical ROC-style analysis of the 2024 data; doing so would be a spec amendment.

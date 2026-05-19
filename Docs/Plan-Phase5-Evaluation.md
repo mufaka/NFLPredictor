@@ -37,7 +37,7 @@ This is a single-developer learning project. Phases are sized for one person to 
 3. **Vertical slices where practical.** Each phase delivers something runnable or testable on its own; metric primitives in Phase 2 can be exercised before headlines, breakdowns, or plots exist.
 4. **One responsibility per module.** Match the proposed `src/nflpredictor/evaluate/` layout from §5 of the spec; do not pile everything into a single file.
 5. **Two determinism contracts, kept distinct.** Metric content (JSON + breakdown parquets + manifest scalars) is byte-deterministic with no caveat; PNG byte-identity holds only within the same pinned matplotlib wheel on the same platform. Tests in Phases 3 and 4 must assert the right level for each artifact family.
-6. **Phase 5 measures. It does not select winners.** No "best model" field in any output. Headline-metric values are reported; the human or Phase 6 chooses.
+6. **Phase 5 measures. It does not select winners.** No "best model" field in any output. Headline-metric values are reported; the human or Phase 7 chooses.
 7. **Test slice is touched unconditionally.** Per EV-MAN-07 and the §"Choices" decision in the spec, S1.test rows appear in every output on every run with no opt-in flag.
 8. **The specification is source of truth.** When the plan and the spec disagree, fix the plan or fix the spec — do not silently improvise.
 
@@ -502,7 +502,7 @@ Phase 5 is complete when:
 - Phase 5's S1.val headline MAE numerically matches Phase 4's `training_summaries.<combo>.val_mae` for every combination.
 - The `CLAUDE.md` and `Idea.md` doc updates are in place.
 
-At that point, Phase 6 (Error Analysis & Iteration) can begin scoping against the *actual* Phase 5 outputs on disk — per-combination headline values, per-slice test MAE, per-week and per-team residual patterns — rather than imagined data, which is the same discipline that paced Phases 1–4 against their successors.
+At that point, Phase 7 (Error Analysis & Iteration) can begin scoping against the *actual* Phase 5 outputs on disk — per-combination headline values, per-slice test MAE, per-week and per-team residual patterns — rather than imagined data, which is the same discipline that paced Phases 1–4 against their successors.
 
 ---
 

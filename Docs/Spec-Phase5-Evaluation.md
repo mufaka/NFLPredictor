@@ -6,7 +6,7 @@
 
 This specification defines the **Evaluation** phase of the NFL Predictor project. Phase 5 consumes Phase 4's prediction artifacts plus Phase 2's labels and breakdown columns and emits a fixed set of metric artifacts: a headline-metrics JSON, per-breakdown parquet tables, calibration plot PNGs, and an evaluation manifest.
 
-Phases 1, 2, 3, and 4 are implemented and frozen; this spec assumes their outputs as given. Phase 6 (Error Analysis & Iteration) and beyond remain exploratory in `Docs/Idea.md` and are intentionally not specified yet — Phase 5 closes the contract one layer up the stack by producing the metric surface that an error-analysis phase can bind to.
+Phases 1, 2, 3, and 4 are implemented and frozen; this spec assumes their outputs as given. Phase 7 (Error Analysis & Iteration) and beyond remain exploratory in `Docs/Idea.md` and are intentionally not specified yet — Phase 5 closes the contract one layer up the stack by producing the metric surface that an error-analysis phase can bind to.
 
 ### 1.2 Scope
 
@@ -24,8 +24,8 @@ Out of scope:
 
 - **Rung selection.** Phase 5 reports per-combination metrics on every emitted slice; the human decides which `(rung, shape)` is the "chosen" model. No "best model" field is emitted.
 - **External benchmarks (Vegas closing lines, prior-season models, third-party prediction services).** v1 evaluates only the rungs Phase 4 emits.
-- **Error attribution / saliency / SHAP / Integrated Gradients.** Feature attribution is a Phase 6 concern.
-- **Worst-N narrative analysis.** Phase 5 emits raw per-game residuals as a byproduct of the breakdown tables; tagging the worst games with likely causes (injury, weather extreme, blowout) is a Phase 6 act.
+- **Error attribution / saliency / SHAP / Integrated Gradients.** Feature attribution is a Phase 7 concern.
+- **Worst-N narrative analysis.** Phase 5 emits raw per-game residuals as a byproduct of the breakdown tables; tagging the worst games with likely causes (injury, weather extreme, blowout) is a Phase 7 act.
 - **Re-training, model amendments, or any modification of Phase 4 outputs.** Phase 5 is read-only with respect to `Data/processed/predictions/`.
 - **Cross-PNG-renderer byte determinism.** Metric JSONs and breakdown parquets are byte-deterministic given pinned inputs; PNG byte-identity holds only for the same pinned matplotlib wheel on the same platform.
 - **Probabilistic / interval predictions.** Phase 4 emits point predictions only; Phase 5 evaluates point predictions only.
@@ -49,14 +49,14 @@ Out of scope:
 
 ### 1.4 Design Principles
 
-- **Contract first.** The headline-metrics JSON schema, the breakdown parquet schemas, and the evaluation manifest are stable, documented contracts. Phase 6 (and any external consumer) binds to them, not to the build internals.
+- **Contract first.** The headline-metrics JSON schema, the breakdown parquet schemas, and the evaluation manifest are stable, documented contracts. Phase 7 (and any external consumer) binds to them, not to the build internals.
 - **Determinism (metric content).** Identical inputs (Phase 2 outputs + Phase 3 outputs + Phase 4 outputs + `evaluation_config.yaml`) shall produce byte-identical metric JSONs and byte-identical breakdown parquets across runs. The only permitted source of run-to-run drift in these artifacts is the manifest's `build_timestamp_utc`. PNG byte-identity is a softer guarantee — see TR-NF-02 (Phase 5 NF block).
 - **Source-hash pinning.** The build refuses to run if any upstream artifact's on-disk SHA-256 does not match the SHA recorded in the corresponding upstream manifest. Drift fails fast; it never silently propagates into metrics.
-- **One responsibility per phase.** Phase 5 computes metrics and renders plots. It does not select the winning rung, does not retrain anything, does not attribute errors to features, and does not propose Phase 6 hypotheses. Those are Phase 6 concerns.
+- **One responsibility per phase.** Phase 5 computes metrics and renders plots. It does not select the winning rung, does not retrain anything, does not attribute errors to features, and does not propose Phase 7 hypotheses. Those are Phase 7 concerns.
 - **No metric leakage across phases.** Phase 4 already computes val MAE for its manifest (TR-MAN-04). Phase 5 recomputes val MAE from scratch using the formula in §3.4 and shall produce numerically identical values; the cross-check is enforced in tests (EV-TEST-08).
 - **Configuration over code edits.** Toggling a breakdown dimension, swapping the headline metric, or turning off PNG rendering is a YAML edit. Adding a new metric or a new breakdown dimension is a code change accompanied by a config-schema change and an `evaluation_version` bump.
 - **Test slice is touched, but not interpreted.** Phase 5 computes test MAE because Phase 4 has already emitted test predictions; computing it is just arithmetic over a parquet that already exists on disk. No special "test mode" or opt-in flag is required. Test metrics appear in the headline file with `slice = "test"`; choosing to *read* them and freeze the final model is a human act.
-- **Plot content is data, not narrative.** PNGs surface what the tables already say. Anything that requires prose or judgment is a Phase 6 deliverable, not a Phase 5 plot.
+- **Plot content is data, not narrative.** PNGs surface what the tables already say. Anything that requires prose or judgment is a Phase 7 deliverable, not a Phase 5 plot.
 
 ### 1.5 Relationship to Phases 1–4
 
@@ -515,8 +515,8 @@ The following are explicitly out of scope for Phase 5 v1 and recorded so they ar
 - **External baselines.** Comparing against Vegas closing lines, prior-season "predict last year's score" baselines, or third-party prediction services is deferred. Adding any would be a Phase 5 amendment with a new input-contract block and a `evaluation_version` bump.
 - **Probabilistic / interval metrics.** Phase 4 emits point predictions only. If a future ladder rung produces score distributions (e.g., quantile regression, a Gaussian head), Phase 5 will need to add proper scoring rules (CRPS, log-likelihood) and prediction-interval coverage metrics.
 - **Calibration plots beyond v1.** Reliability diagrams, Q-Q plots of residuals, predicted-vs-actual KDE overlays, and per-team residual fan charts are all reasonable additions; v1 intentionally keeps the plot inventory short.
-- **Cross-combination diff views.** A side-by-side "rung k vs rung k+1 residual diff" plot or table would directly support the Phase 6 question "did the upgrade earn its keep." Deferred to Phase 6.
-- **Aggregation across multiple training runs.** v1 evaluates a single Phase 4 output set. A future amendment could compare two runs (different seeds, different configs) by reading two `training_manifest.json` snapshots. Out of scope until Phase 6's iteration loop demands it.
+- **Cross-combination diff views.** A side-by-side "rung k vs rung k+1 residual diff" plot or table would directly support the Phase 7 question "did the upgrade earn its keep." Deferred to Phase 7.
+- **Aggregation across multiple training runs.** v1 evaluates a single Phase 4 output set. A future amendment could compare two runs (different seeds, different configs) by reading two `training_manifest.json` snapshots. Out of scope until Phase 7's iteration loop demands it.
 - **HTML / dashboard renderings.** PNGs are the v1 surface. A Jupyter notebook or static HTML dashboard that mounts these artifacts is left to ad-hoc exploration; no programmatic dashboard generator is in scope.
 - **Cross-matplotlib-version PNG byte determinism.** Not promised. The manifest's `matplotlib_version` records the wheel used; changing it is a deliberate environment update.
 - **Multi-season evaluation.** When Phase 2/3/4 outputs cover more than 2024, the evaluation build will need a `--season` flag or per-season config wiring. v1 stays 2024-only.
