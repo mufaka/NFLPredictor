@@ -42,7 +42,7 @@ PLOT_CFG = PlotConfig(
 
 
 def _joined_s1_frame() -> pd.DataFrame:
-    """A tiny S1 joined frame: 3 val games + 2 test games."""
+    """A tiny season_holdout joined frame: 3 val games + 2 test games."""
     return pd.DataFrame({
         "GameId": ["g1", "g2", "g3", "g4", "g5"],
         "slice": ["val", "val", "val", "test", "test"],
@@ -57,7 +57,7 @@ def _joined_s1_frame() -> pd.DataFrame:
 
 
 def _joined_s3_frame() -> pd.DataFrame:
-    """A tiny S3 joined frame: 4 games across 2 folds."""
+    """A tiny loso_cv joined frame: 4 games across 2 folds."""
     return pd.DataFrame({
         "GameId": ["g1", "g2", "g3", "g4"],
         "fold_index": [0, 0, 1, 1],
@@ -74,7 +74,7 @@ def _joined_s3_frame() -> pd.DataFrame:
 def _headline_fixture() -> dict:
     return {
         "combinations": {
-            "rung0_mean__none__s1": {
+            "rung0_mean__none__season_holdout": {
                 "val": {"n_games": 3, "mae": 5.0, "mae_home": 5.0, "mae_away": 5.0,
                         "rmse_home": 6.0, "rmse_away": 6.0, "wl_accuracy": 0.5,
                         "spread_mae": 3.0, "total_mae": 6.0},
@@ -82,7 +82,7 @@ def _headline_fixture() -> dict:
                          "rmse_home": 6.5, "rmse_away": 6.5, "wl_accuracy": 0.5,
                          "spread_mae": 3.5, "total_mae": 7.0},
             },
-            "rung2_linear__flat__s3": {
+            "rung2_linear__flat__loso_cv": {
                 "fold_0": {"n_games": 2, "mae": 4.0, "mae_home": 4.0, "mae_away": 4.0,
                            "rmse_home": 5.0, "rmse_away": 5.0, "wl_accuracy": 0.5,
                            "spread_mae": 2.0, "total_mae": 4.0},
@@ -134,16 +134,16 @@ def test_plot_ladder_summary_returns_figure_and_writes_png(tmp_path: pathlib.Pat
 
 
 def test_plot_ladder_summary_skips_combos_without_slice() -> None:
-    """S3 combos shouldn't appear in val/test ladder; S1 combos shouldn't appear in pooled."""
+    """loso_cv combos shouldn't appear in val/test ladder; season_holdout combos shouldn't appear in pooled."""
     headline = _headline_fixture()
     fig_val = plot_ladder_summary(headline, "val", "mae", PLOT_CFG)
-    # val should include only the S1 combo (one bar).
+    # val should include only the season_holdout combo (one bar).
     n_bars_val = sum(len(c.get_children()) for c in fig_val.axes[0].containers)
     plt.close(fig_val)
     fig_pooled = plot_ladder_summary(headline, "pooled", "mae", PLOT_CFG)
     n_bars_pooled = sum(len(c.get_children()) for c in fig_pooled.axes[0].containers)
     plt.close(fig_pooled)
-    # val=1 bar (S1 only), pooled=1 bar (S3 only).
+    # val=1 bar (season_holdout only), pooled=1 bar (loso_cv only).
     assert n_bars_val == 1
     assert n_bars_pooled == 1
 
@@ -263,18 +263,18 @@ def test_render_all_plots_emits_expected_filenames(tmp_path: pathlib.Path) -> No
     joined_s1 = _joined_s1_frame()
     joined_s3 = _joined_s3_frame()
     joined_by_combo = {
-        "rung0_mean__none__s1": joined_s1,
-        "rung2_linear__flat__s3": joined_s3,
+        "rung0_mean__none__season_holdout": joined_s1,
+        "rung2_linear__flat__loso_cv": joined_s3,
     }
     strategy_by_combo = {
-        "rung0_mean__none__s1": "S1",
-        "rung2_linear__flat__s3": "S3",
+        "rung0_mean__none__season_holdout": "season_holdout",
+        "rung2_linear__flat__loso_cv": "loso_cv",
     }
     # by_week breakdown table for both combos × val/test/pooled.
     by_week_rows = []
     for combo, slices in (
-        ("rung0_mean__none__s1", ("val", "test")),
-        ("rung2_linear__flat__s3", ("pooled",)),
+        ("rung0_mean__none__season_holdout", ("val", "test")),
+        ("rung2_linear__flat__loso_cv", ("pooled",)),
     ):
         for slice_name in slices:
             for week in range(1, 19):
@@ -301,19 +301,19 @@ def test_render_all_plots_emits_expected_filenames(tmp_path: pathlib.Path) -> No
     )
 
     written_names = sorted(p.name for p in written)
-    # S1 combo: val + test × {scatter, residuals, by_week} = 6 PNGs
-    # S3 combo: pooled × {scatter, residuals, by_week} = 3 PNGs
+    # season_holdout combo: val + test × {scatter, residuals, by_week} = 6 PNGs
+    # loso_cv combo: pooled × {scatter, residuals, by_week} = 3 PNGs
     # Ladder summaries: val, test, pooled = 3 PNGs
     expected = sorted([
-        "rung0_mean__none__s1__val__scatter.png",
-        "rung0_mean__none__s1__val__residuals.png",
-        "rung0_mean__none__s1__val__by_week.png",
-        "rung0_mean__none__s1__test__scatter.png",
-        "rung0_mean__none__s1__test__residuals.png",
-        "rung0_mean__none__s1__test__by_week.png",
-        "rung2_linear__flat__s3__pooled__scatter.png",
-        "rung2_linear__flat__s3__pooled__residuals.png",
-        "rung2_linear__flat__s3__pooled__by_week.png",
+        "rung0_mean__none__season_holdout__val__scatter.png",
+        "rung0_mean__none__season_holdout__val__residuals.png",
+        "rung0_mean__none__season_holdout__val__by_week.png",
+        "rung0_mean__none__season_holdout__test__scatter.png",
+        "rung0_mean__none__season_holdout__test__residuals.png",
+        "rung0_mean__none__season_holdout__test__by_week.png",
+        "rung2_linear__flat__loso_cv__pooled__scatter.png",
+        "rung2_linear__flat__loso_cv__pooled__residuals.png",
+        "rung2_linear__flat__loso_cv__pooled__by_week.png",
         "ladder_summary__val.png",
         "ladder_summary__test.png",
         "ladder_summary__pooled.png",
@@ -337,8 +337,8 @@ def test_render_all_plots_respects_plot_toggles(tmp_path: pathlib.Path) -> None:
     written = render_all_plots(
         headline=_headline_fixture(),
         breakdown_tables_by_dim={},
-        joined_by_combo={"rung0_mean__none__s1": _joined_s1_frame()},
-        strategy_by_combo={"rung0_mean__none__s1": "S1"},
+        joined_by_combo={"rung0_mean__none__season_holdout": _joined_s1_frame()},
+        strategy_by_combo={"rung0_mean__none__season_holdout": "season_holdout"},
         plot_cfg=cfg,
         headline_metric="mae",
         plots_dir=tmp_path,
@@ -346,15 +346,15 @@ def test_render_all_plots_respects_plot_toggles(tmp_path: pathlib.Path) -> None:
     names = sorted(p.name for p in written)
     # Only residual histograms for val + test → 2 PNGs.
     assert names == [
-        "rung0_mean__none__s1__test__residuals.png",
-        "rung0_mean__none__s1__val__residuals.png",
+        "rung0_mean__none__season_holdout__test__residuals.png",
+        "rung0_mean__none__season_holdout__val__residuals.png",
     ]
 
 
 def test_per_strategy_plot_slices_constant() -> None:
     """Sanity-check the slice basis mapping matches EV-PLOT-01 / EV-PLOT-02 / EV-PLOT-04."""
-    assert PER_STRATEGY_PLOT_SLICES["S1"] == ("val", "test")
-    assert PER_STRATEGY_PLOT_SLICES["S3"] == ("pooled",)
+    assert PER_STRATEGY_PLOT_SLICES["season_holdout"] == ("val", "test")
+    assert PER_STRATEGY_PLOT_SLICES["loso_cv"] == ("pooled",)
     assert LADDER_SLICE_BASES == ("val", "test", "pooled")
 
 

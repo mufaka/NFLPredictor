@@ -2,7 +2,7 @@
 
 Against the synthetic Phase 5 fixture (which carries real Phase 4
 training_summaries with per-combo val_mae values), compute Phase 5's
-headline MAE for every S1 val cell and every S3 per-fold cell and assert
+headline MAE for every season_holdout val cell and every loso_cv per-fold cell and assert
 numerical agreement with Phase 4's recorded value. Prevents EV-MET-01 and
 TR-MAN-04 from silently drifting apart.
 """
@@ -69,11 +69,11 @@ def test_cross_phase_s1_val_mae_matches_training_summary() -> None:
     )
 
     for key in combinations:
-        if key.strategy != "S1":
+        if key.strategy != "season_holdout":
             continue
         preds = load_prediction_parquet(key)
         joined = join_predictions_with_labels(preds, features_flat)
-        headline = build_headline_for_combination(joined, "S1")
+        headline = build_headline_for_combination(joined, "season_holdout")
         ev_val_mae = headline["val"]["mae"]
         tr_val_mae = training_summaries[key.combination_id]["val_mae"]
         assert ev_val_mae == pytest.approx(tr_val_mae, **TOLERANCE), (
@@ -92,11 +92,11 @@ def test_cross_phase_s3_per_fold_val_mae_matches_training_summary() -> None:
     )
 
     for key in combinations:
-        if key.strategy != "S3":
+        if key.strategy != "loso_cv":
             continue
         preds = load_prediction_parquet(key)
         joined = join_predictions_with_labels(preds, features_flat)
-        headline = build_headline_for_combination(joined, "S3")
+        headline = build_headline_for_combination(joined, "loso_cv")
         tr_per_fold = training_summaries[key.combination_id]["per_fold"]
         for fold in tr_per_fold:
             i = int(fold["fold_index"])

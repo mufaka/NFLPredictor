@@ -36,8 +36,8 @@ _RESIDUAL_BIN_EDGES: np.ndarray = np.arange(-30.0, 32.0, 2.0)
 # Slice bases that the per-combination plot families render for, per strategy
 # (EV-PLOT-01 / EV-PLOT-02 / EV-PLOT-04).
 PER_STRATEGY_PLOT_SLICES: dict[str, tuple[str, ...]] = {
-    "S1": ("val", "test"),
-    "S3": ("pooled",),
+    "season_holdout": ("val", "test"),
+    "loso_cv": ("pooled",),
 }
 
 # Slice bases for the ladder summary (EV-PLOT-03).
@@ -77,15 +77,15 @@ def _figsize(plot_cfg: PlotConfig) -> tuple[float, float]:
 def _slice_games(joined: pd.DataFrame, slice_name: str) -> pd.DataFrame:
     """Filter the joined predictions frame to one slice basis.
 
-    ``"pooled"`` returns the entire frame (S3 pooled = concat of all folds).
-    Otherwise the frame is filtered by the ``slice`` column (S1 val / test).
+    ``"pooled"`` returns the entire frame (loso_cv pooled = concat of all folds).
+    Otherwise the frame is filtered by the ``slice`` column (season_holdout val / test).
     """
     if slice_name == "pooled":
         return joined
     if "slice" not in joined.columns:
         raise ValueError(
             f"cannot slice frame by {slice_name!r}: 'slice' column not present "
-            "(is this an S3 frame? S3 only renders the 'pooled' basis)"
+            "(is this an loso_cv frame? loso_cv only renders the 'pooled' basis)"
         )
     return joined.loc[joined["slice"] == slice_name]
 
@@ -192,7 +192,7 @@ def plot_ladder_summary(
     """Per-combination bar chart of the configured headline metric (EV-PLOT-03).
 
     Combinations whose per-combo block does not contain ``slice_basis`` are
-    omitted (e.g., S3 combos when ``slice_basis == "test"``). Bars are sorted
+    omitted (e.g., loso_cv combos when ``slice_basis == "test"``). Bars are sorted
     lexicographically.
     """
     combo_block = headline.get("combinations", {})

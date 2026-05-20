@@ -20,12 +20,12 @@ import pyarrow.parquet as pq
 from nflpredictor.databuild.manifest import compute_sha256
 
 
-PHASE2_FEATURES_FLAT_BASENAME = "features_flat_2024.parquet"
-PHASE2_FEATURES_POS_BASENAME = "features_pos_2024.parquet"
+PHASE2_FEATURES_FLAT_BASENAME = "features_flat_all.parquet"
+PHASE2_FEATURES_POS_BASENAME = "features_pos_all.parquet"
 PHASE2_VOCAB_BASENAME = "feature_vocab.json"
 PHASE2_MANIFEST_BASENAME = "feature_manifest.json"
 
-PHASE3_SPLITS_BASENAME = "splits_2024.json"
+PHASE3_SPLITS_BASENAME = "splits_all.json"
 PHASE3_MANIFEST_BASENAME = "splits_manifest.json"
 
 PHASE4_MANIFEST_BASENAME = "training_manifest.json"
@@ -43,7 +43,7 @@ class Phase2OutputMismatchError(ValueError):
 
 
 class Phase3OutputMismatchError(ValueError):
-    """Raised when splits_2024.json diverges from splits_manifest.json (EV-IN-07)."""
+    """Raised when splits_all.json diverges from splits_manifest.json (EV-IN-07)."""
 
 
 class Phase4OutputMismatchError(ValueError):
@@ -97,7 +97,7 @@ def verify_phase2_outputs(processed_dir: pathlib.Path) -> dict[str, Any]:
 
 
 def verify_phase3_outputs(processed_dir: pathlib.Path) -> dict[str, Any]:
-    """Verify ``splits_2024.json`` against ``splits_manifest.json`` (EV-IN-07).
+    """Verify ``splits_all.json`` against ``splits_manifest.json`` (EV-IN-07).
 
     Returns the parsed Phase 3 manifest so downstream code can copy provenance.
     """
@@ -196,7 +196,7 @@ class PredictionCoverageError(ValueError):
 
 
 def load_features_flat(processed_dir: pathlib.Path) -> pd.DataFrame:
-    """Read ``features_flat_2024.parquet`` (labels + breakdown columns).
+    """Read ``features_flat_all.parquet`` (labels + breakdown columns).
 
     Returned frame is sorted by ``GameId`` for stable downstream iteration.
     """
@@ -206,7 +206,7 @@ def load_features_flat(processed_dir: pathlib.Path) -> pd.DataFrame:
 
 
 def load_features_pos(processed_dir: pathlib.Path) -> pd.DataFrame:
-    """Read ``features_pos_2024.parquet`` (consulted only for EV-NF-03 parity)."""
+    """Read ``features_pos_all.parquet`` (consulted only for EV-NF-03 parity)."""
     path = processed_dir / PHASE2_FEATURES_POS_BASENAME
     df = pq.read_table(path).to_pandas()
     return df.sort_values("GameId", kind="mergesort").reset_index(drop=True)
@@ -228,7 +228,7 @@ def load_vocab(processed_dir: pathlib.Path) -> dict[str, list[str]]:
 
 
 def load_splits(processed_dir: pathlib.Path) -> dict[str, Any]:
-    """Read ``splits_2024.json``."""
+    """Read ``splits_all.json``."""
     return _load_json(processed_dir / PHASE3_SPLITS_BASENAME)
 
 
@@ -254,8 +254,8 @@ def assert_label_parity(flat: pd.DataFrame, pos: pd.DataFrame) -> None:
 class CombinationKey:
     """Identifies one Phase 4 prediction parquet (EV-COMB-01, EV-COMB-05)."""
 
-    combination_id: str   # parquet filename stem (e.g., "rung0_mean__none__s1")
-    strategy: str         # "S1" or "S3"
+    combination_id: str   # parquet filename stem (e.g., "rung0_mean__none__season_holdout")
+    strategy: str         # "season_holdout" or "loso_cv"
     parquet_path: pathlib.Path
 
 
@@ -283,13 +283,13 @@ def enumerate_combinations(
                 f"unexpected non-parquet entry in predictions/: {manifest_key!r}"
             )
         stem = basename[: -len(".parquet")]
-        if stem.endswith("__s1"):
-            strategy = "S1"
-        elif stem.endswith("__s3"):
-            strategy = "S3"
+        if stem.endswith("__season_holdout"):
+            strategy = "season_holdout"
+        elif stem.endswith("__loso_cv"):
+            strategy = "loso_cv"
         else:
             raise Phase4OutputMismatchError(
-                f"prediction filename {basename!r} does not end with __s1 or __s3"
+                f"prediction filename {basename!r} does not end with __season_holdout or __loso_cv"
             )
         combinations.append(
             CombinationKey(
@@ -304,7 +304,7 @@ def enumerate_combinations(
 def load_prediction_parquet(key: CombinationKey) -> pd.DataFrame:
     """Read a prediction parquet into a frame with the per-strategy columns.
 
-    S1 parquets carry ``(slice, GameId, pred_home, pred_away)``; S3 parquets
+    season_holdout parquets carry ``(slice, GameId, pred_home, pred_away)``; loso_cv parquets
     carry ``(fold_index, GameId, pred_home, pred_away)``. Phase 4's writers
     (TR-OUT-02, TR-OUT-03) emit these schemas; this loader is a thin pass-through.
     """
@@ -318,19 +318,19 @@ def validate_prediction_coverage(
 ) -> None:
     """Verify a prediction parquet's GameId membership matches the splits artifact (EV-IN-10).
 
-    S1: ``slice == "val"`` rows' GameIds equal ``splits.S1.val``; ``slice == "test"``
-        rows equal ``splits.S1.test``.
-    S3: per ``fold_index = i``, rows' GameIds equal ``splits.S3.folds[i].val``.
+    season_holdout: ``slice == "val"`` rows' GameIds equal ``splits.season_holdout.val``; ``slice == "test"``
+        rows equal ``splits.season_holdout.test``.
+    loso_cv: per ``fold_index = i``, rows' GameIds equal ``splits.loso_cv.folds[i].val``.
     """
-    if key.strategy == "S1":
+    if key.strategy == "season_holdout":
         if "slice" not in predictions.columns:
             raise PredictionCoverageError(
-                f"{key.combination_id}: S1 parquet missing required 'slice' column"
+                f"{key.combination_id}: season_holdout parquet missing required 'slice' column"
             )
-        s1 = splits.get("S1")
+        s1 = splits.get("season_holdout")
         if not isinstance(s1, dict):
             raise PredictionCoverageError(
-                "splits artifact missing 'S1' block; cannot verify coverage"
+                "splits artifact missing 'season_holdout' block; cannot verify coverage"
             )
         for slice_name in ("val", "test"):
             expected = set(s1.get(slice_name, []))
@@ -342,19 +342,19 @@ def validate_prediction_coverage(
                 extra = sorted(actual - expected)
                 raise PredictionCoverageError(
                     f"{key.combination_id}: slice={slice_name!r} GameId set diverges "
-                    f"from splits.S1.{slice_name}; missing={missing[:5]} extra={extra[:5]}"
+                    f"from splits.season_holdout.{slice_name}; missing={missing[:5]} extra={extra[:5]}"
                 )
         return
 
-    # S3
+    # loso_cv
     if "fold_index" not in predictions.columns:
         raise PredictionCoverageError(
-            f"{key.combination_id}: S3 parquet missing required 'fold_index' column"
+            f"{key.combination_id}: loso_cv parquet missing required 'fold_index' column"
         )
-    s3 = splits.get("S3")
+    s3 = splits.get("loso_cv")
     if not isinstance(s3, dict) or not isinstance(s3.get("folds"), list):
         raise PredictionCoverageError(
-            "splits artifact missing 'S3.folds' block; cannot verify coverage"
+            "splits artifact missing 'loso_cv.folds' block; cannot verify coverage"
         )
     folds = s3["folds"]
     for fold in folds:
@@ -368,7 +368,7 @@ def validate_prediction_coverage(
             extra = sorted(actual - expected)
             raise PredictionCoverageError(
                 f"{key.combination_id}: fold_index={i} GameId set diverges "
-                f"from splits.S3.folds[{i}].val; missing={missing[:5]} extra={extra[:5]}"
+                f"from splits.loso_cv.folds[{i}].val; missing={missing[:5]} extra={extra[:5]}"
             )
     # Also assert no rogue fold_index values appear in the parquet.
     valid_indices = {int(f["fold_index"]) for f in folds}
@@ -377,5 +377,5 @@ def validate_prediction_coverage(
     if extra_folds:
         raise PredictionCoverageError(
             f"{key.combination_id}: prediction parquet has unknown fold_index values "
-            f"not present in splits.S3.folds: {extra_folds}"
+            f"not present in splits.loso_cv.folds: {extra_folds}"
         )

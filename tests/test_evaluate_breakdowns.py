@@ -66,7 +66,7 @@ def _team_row(df: pd.DataFrame, team: str, role: str, slice_name: str = "val") -
 
 
 def test_by_team_doubles_each_game_per_home_away_role() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_TEAM, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_TEAM, VOCAB)
     # 4 teams × 2 roles × 2 slices (val + empty-test) = 16 rows.
     assert len(df) == 16
     assert set(df["team_code"]) == {"atl", "buf", "car", "den"}
@@ -82,7 +82,7 @@ def test_by_team_doubles_each_game_per_home_away_role() -> None:
 
 
 def test_by_team_empty_team_emits_null_metrics() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_TEAM, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_TEAM, VOCAB)
     # "den" never plays — every (slice, role) row should have n_games=0 and null metrics.
     # Pandas coerces None -> NaN inside float metric columns; both representations
     # round-trip to parquet null.
@@ -96,7 +96,7 @@ def test_by_team_empty_team_emits_null_metrics() -> None:
 
 
 def test_by_team_metrics_match_hand_computation() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_TEAM, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_TEAM, VOCAB)
     # atl home plays g1 + g3:
     # g1: pred(21,17), true(24,17) → home_err=3, away_err=0 → mae=(3+0)/2=1.5
     # g3: pred(14,21), true(24,21) → home_err=10, away_err=0 → mae=(10+0)/2=5.0
@@ -115,7 +115,7 @@ def test_by_team_metrics_match_hand_computation() -> None:
 
 
 def test_by_week_emits_full_universe_with_empty_weeks() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_WEEK, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_WEEK, VOCAB)
     # 18 weeks × 2 slices (val + empty-test) = 36 rows.
     assert len(df) == 2 * len(WEEK_UNIVERSE)
     assert set(df["week"]) == set(WEEK_UNIVERSE)
@@ -129,7 +129,7 @@ def test_by_week_emits_full_universe_with_empty_weeks() -> None:
 
 
 def test_by_week_metrics_match_hand_computation() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_WEEK, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_WEEK, VOCAB)
     # Week 1 val: g1 + g2
     # g1: home_err=3, away_err=0 → contribute 3, 0
     # g2: home_err=|28-21|=7, away_err=|20-27|=7 → contribute 7, 7
@@ -146,7 +146,7 @@ def test_by_week_metrics_match_hand_computation() -> None:
 
 
 def test_by_home_away_two_rows_per_cell() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_HOME_AWAY, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_HOME_AWAY, VOCAB)
     # 2 roles × 2 slices = 4 rows (test slice empty).
     assert len(df) == 4
     val_rows = df[df["slice"] == "val"]
@@ -161,7 +161,7 @@ def test_by_home_away_two_rows_per_cell() -> None:
 
 def test_by_home_away_mae_home_reflects_home_side_residuals_only() -> None:
     """Plan §3.4 assertion: mae_home in the home row is the home-side MAE."""
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_HOME_AWAY, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_HOME_AWAY, VOCAB)
     val = df[df["slice"] == "val"]
     home_row = val[val["home_or_away"] == "home"].iloc[0]
     # Hand: home errors = |21-24|, |28-21|, |14-24|, |31-14|, |13-17|, |28-27|
@@ -179,7 +179,7 @@ def test_by_home_away_mae_home_reflects_home_side_residuals_only() -> None:
 
 
 def test_by_surface_emits_vocab_universe_with_label_column() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_SURFACE, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_SURFACE, VOCAB)
     # 3 surfaces × 2 slices = 6 rows.
     assert len(df) == 2 * len(VOCAB["surface"])
     val = df[df["slice"] == "val"]
@@ -195,7 +195,7 @@ def test_by_surface_emits_vocab_universe_with_label_column() -> None:
 
 
 def test_by_roof_emits_vocab_universe_with_label_column() -> None:
-    df = aggregate_breakdown("combo", SIX_GAMES, "S1", BY_ROOF, VOCAB)
+    df = aggregate_breakdown("combo", SIX_GAMES, "season_holdout", BY_ROOF, VOCAB)
     # 2 roofs × 2 slices = 4 rows.
     assert len(df) == 2 * len(VOCAB["roof"])
     val = df[df["slice"] == "val"]
@@ -208,7 +208,7 @@ def test_by_roof_emits_vocab_universe_with_label_column() -> None:
 def test_by_surface_excludes_null_sentinel_rows() -> None:
     games = SIX_GAMES.copy()
     games.loc[games.index[0], "surface"] = -1   # NULL sentinel
-    df = aggregate_breakdown("combo", games, "S1", BY_SURFACE, VOCAB)
+    df = aggregate_breakdown("combo", games, "season_holdout", BY_SURFACE, VOCAB)
     # No row for surface_code = -1 should appear.
     assert -1 not in set(df["surface_code"])
 
@@ -220,25 +220,25 @@ def test_by_surface_excludes_null_sentinel_rows() -> None:
 
 def test_build_breakdown_table_sorts_lexicographically() -> None:
     joined_by_combo = {
-        "rung2_linear__flat__s1": SIX_GAMES,
-        "rung0_mean__none__s1": SIX_GAMES,
+        "rung2_linear__flat__season_holdout": SIX_GAMES,
+        "rung0_mean__none__season_holdout": SIX_GAMES,
     }
     ordered = sorted(joined_by_combo.keys())  # lexicographic
-    pairs = [(c, "S1") for c in ordered]
+    pairs = [(c, "season_holdout") for c in ordered]
     df = build_breakdown_table(BY_WEEK, pairs, joined_by_combo, VOCAB)
     # Combination order — first combination must come first.
     first_block = df["combination_id"].iloc[0]
-    assert first_block == "rung0_mean__none__s1"
+    assert first_block == "rung0_mean__none__season_holdout"
     # Within a combination + slice, week sorts ascending.
     val_weeks = list(
         df[
-            (df["combination_id"] == "rung0_mean__none__s1")
+            (df["combination_id"] == "rung0_mean__none__season_holdout")
             & (df["slice"] == "val")
         ]["week"]
     )
     assert val_weeks == sorted(val_weeks)
     # And slice ordering is lexicographic per EV-OUT-02: "test" < "val".
-    slice_rows = df[df["combination_id"] == "rung0_mean__none__s1"]
+    slice_rows = df[df["combination_id"] == "rung0_mean__none__season_holdout"]
     slice_seq = list(slice_rows["slice"].unique())
     assert slice_seq == ["test", "val"]
 
@@ -251,7 +251,7 @@ def test_all_specs_registered() -> None:
 
 def test_aggregate_breakdown_s3_per_fold_and_pooled() -> None:
     games = SIX_GAMES.drop(columns=["slice"]).assign(fold_index=[0, 0, 0, 1, 1, 1])
-    df = aggregate_breakdown("combo", games, "S3", BY_WEEK, VOCAB)
+    df = aggregate_breakdown("combo", games, "loso_cv", BY_WEEK, VOCAB)
     # Slices: fold_0, fold_1, pooled — 3 slices × 18 weeks = 54 rows.
     assert set(df["slice"]) == {"fold_0", "fold_1", "pooled"}
     assert len(df) == 3 * len(WEEK_UNIVERSE)

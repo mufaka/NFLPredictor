@@ -27,9 +27,9 @@ def build_evaluation_summary(
 ) -> dict[str, Any]:
     """Per-combination summary block (EV-MAN-02).
 
-    For S1 combos (combination id ends with ``__s1``):
+    For season_holdout combos (combination id ends with ``__season_holdout``):
         ``{"val": <float or None>, "test": <float or None>}``
-    For S3 combos (ends with ``__s3``):
+    For loso_cv combos (ends with ``__loso_cv``):
         ``{"pooled": <float or None>, "mean_per_fold": <float or None>,
            "per_fold": [<float or None>, ...]}``
 
@@ -40,12 +40,12 @@ def build_evaluation_summary(
     summary: dict[str, Any] = {}
     for combo_id in sorted(combo_block.keys()):
         per_combo = combo_block[combo_id]
-        if combo_id.endswith("__s1"):
+        if combo_id.endswith("__season_holdout"):
             summary[combo_id] = {
                 "val": _maybe_value(per_combo.get("val"), headline_metric),
                 "test": _maybe_value(per_combo.get("test"), headline_metric),
             }
-        elif combo_id.endswith("__s3"):
+        elif combo_id.endswith("__loso_cv"):
             per_fold: list[Optional[float]] = []
             for slice_name in sorted(per_combo.keys()):
                 if slice_name.startswith("fold_"):
@@ -58,10 +58,10 @@ def build_evaluation_summary(
                 "per_fold": per_fold,
             }
         else:
-            # Defense: combination id should always carry an __s1 / __s3 suffix
+            # Defense: combination id should always carry an __season_holdout / __loso_cv suffix
             # (enforced by enumerate_combinations).
             raise ValueError(
-                f"unrecognized combination id {combo_id!r}: expected __s1 or __s3 suffix"
+                f"unrecognized combination id {combo_id!r}: expected __season_holdout or __loso_cv suffix"
             )
     return summary
 

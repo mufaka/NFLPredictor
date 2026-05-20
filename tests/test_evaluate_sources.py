@@ -129,14 +129,14 @@ def _synthesize_phase4(processed: pathlib.Path) -> dict[str, pathlib.Path]:
     """
     preds_dir = processed / PHASE4_PREDICTIONS_DIRNAME
     preds_dir.mkdir(parents=True, exist_ok=True)
-    fake_a = preds_dir / "rung0_mean__none__s1.parquet"
-    fake_b = preds_dir / "rung2_linear__flat__s3.parquet"
+    fake_a = preds_dir / "rung0_mean__none__season_holdout.parquet"
+    fake_b = preds_dir / "rung2_linear__flat__loso_cv.parquet"
     fake_a.write_bytes(b"\x00fake-s1-bytes\n")
     fake_b.write_bytes(b"\x00fake-s3-bytes\n")
 
     output_sha256 = {
-        "predictions/rung0_mean__none__s1.parquet": compute_sha256(fake_a),
-        "predictions/rung2_linear__flat__s3.parquet": compute_sha256(fake_b),
+        "predictions/rung0_mean__none__season_holdout.parquet": compute_sha256(fake_a),
+        "predictions/rung2_linear__flat__loso_cv.parquet": compute_sha256(fake_b),
     }
     manifest = {
         "build_timestamp_utc": "2026-05-18T00:00:00Z",
@@ -145,8 +145,8 @@ def _synthesize_phase4(processed: pathlib.Path) -> dict[str, pathlib.Path]:
     }
     (processed / PHASE4_MANIFEST_BASENAME).write_text(json.dumps(manifest))
     return {
-        "predictions/rung0_mean__none__s1.parquet": fake_a,
-        "predictions/rung2_linear__flat__s3.parquet": fake_b,
+        "predictions/rung0_mean__none__season_holdout.parquet": fake_a,
+        "predictions/rung2_linear__flat__loso_cv.parquet": fake_b,
     }
 
 
@@ -172,10 +172,10 @@ def test_tampered_phase4_parquet_fails(tmp_path: pathlib.Path) -> None:
     processed = tmp_path / "processed"
     processed.mkdir()
     files = _synthesize_phase4(processed)
-    target = files["predictions/rung2_linear__flat__s3.parquet"]
+    target = files["predictions/rung2_linear__flat__loso_cv.parquet"]
     _tamper_bytes(target)
     with pytest.raises(
-        Phase4OutputMismatchError, match="rung2_linear__flat__s3.parquet"
+        Phase4OutputMismatchError, match="rung2_linear__flat__loso_cv.parquet"
     ):
         verify_phase4_outputs(processed)
 
@@ -212,8 +212,8 @@ def test_phase4_missing_listed_parquet_fails(tmp_path: pathlib.Path) -> None:
     processed = tmp_path / "processed"
     processed.mkdir()
     files = _synthesize_phase4(processed)
-    files["predictions/rung0_mean__none__s1.parquet"].unlink()
-    with pytest.raises(FileNotFoundError, match="rung0_mean__none__s1.parquet"):
+    files["predictions/rung0_mean__none__season_holdout.parquet"].unlink()
+    with pytest.raises(FileNotFoundError, match="rung0_mean__none__season_holdout.parquet"):
         verify_phase4_outputs(processed)
 
 
@@ -228,12 +228,12 @@ def test_load_features_flat_returns_sorted_frame() -> None:
     assert "home_score" in df.columns
     assert "away_score" in df.columns
     assert list(df["GameId"]) == sorted(df["GameId"])
-    assert len(df) == 272
+    assert len(df) == 1622
 
 
 def test_load_features_pos_returns_sorted_frame() -> None:
     df = load_features_pos(REAL_PROCESSED)
-    assert len(df) == 272
+    assert len(df) == 1622
     assert list(df["GameId"]) == sorted(df["GameId"])
 
 
@@ -248,8 +248,8 @@ def test_load_vocab_returns_dict() -> None:
 
 def test_load_splits_returns_dict() -> None:
     splits = load_splits(REAL_PROCESSED)
-    assert "S1" in splits
-    assert "S3" in splits
+    # The shipped splits artifact carries season_holdout (loso_cv is opt-in).
+    assert "season_holdout" in splits
 
 
 def test_label_parity_accepts_real_pair() -> None:
@@ -292,11 +292,11 @@ def test_enumerate_combinations_returns_lexicographic_keys(tmp_path: pathlib.Pat
     manifest = verify_phase4_outputs(processed)
     combos = enumerate_combinations(manifest, processed)
     assert [c.combination_id for c in combos] == [
-        "rung0_mean__none__s1",
-        "rung2_linear__flat__s3",
+        "rung0_mean__none__season_holdout",
+        "rung2_linear__flat__loso_cv",
     ]
-    assert [c.strategy for c in combos] == ["S1", "S3"]
-    assert combos[0].parquet_path.name == "rung0_mean__none__s1.parquet"
+    assert [c.strategy for c in combos] == ["season_holdout", "loso_cv"]
+    assert combos[0].parquet_path.name == "rung0_mean__none__season_holdout.parquet"
 
 
 def test_enumerate_combinations_rejects_unknown_strategy_suffix(
@@ -312,7 +312,7 @@ def test_enumerate_combinations_rejects_unknown_strategy_suffix(
             "predictions/rung0_mean__none__s9.parquet": compute_sha256(bad),
         }
     }
-    with pytest.raises(Phase4OutputMismatchError, match="__s1 or __s3"):
+    with pytest.raises(Phase4OutputMismatchError, match="__season_holdout or __loso_cv"):
         enumerate_combinations(manifest, processed)
 
 
@@ -328,18 +328,18 @@ def _key(combo_id: str, strategy: str) -> CombinationKey:
 
 
 def test_validate_prediction_coverage_s1_happy() -> None:
-    splits = {"S1": {"val": ["g1", "g2"], "test": ["g3"]}, "S3": {"folds": []}}
+    splits = {"season_holdout": {"val": ["g1", "g2"], "test": ["g3"]}, "loso_cv": {"folds": []}}
     preds = pd.DataFrame({
         "GameId": ["g1", "g2", "g3"],
         "slice": ["val", "val", "test"],
         "pred_home": [1.0, 2.0, 3.0],
         "pred_away": [1.0, 2.0, 3.0],
     })
-    validate_prediction_coverage(preds, _key("c", "S1"), splits)  # no raise
+    validate_prediction_coverage(preds, _key("c", "season_holdout"), splits)  # no raise
 
 
 def test_validate_prediction_coverage_s1_missing_game_fails() -> None:
-    splits = {"S1": {"val": ["g1", "g2"], "test": ["g3"]}}
+    splits = {"season_holdout": {"val": ["g1", "g2"], "test": ["g3"]}}
     preds = pd.DataFrame({
         "GameId": ["g1", "g3"],
         "slice": ["val", "test"],
@@ -347,13 +347,13 @@ def test_validate_prediction_coverage_s1_missing_game_fails() -> None:
         "pred_away": [1.0, 3.0],
     })
     with pytest.raises(PredictionCoverageError, match="slice='val'"):
-        validate_prediction_coverage(preds, _key("c", "S1"), splits)
+        validate_prediction_coverage(preds, _key("c", "season_holdout"), splits)
 
 
 def test_validate_prediction_coverage_s3_happy() -> None:
     splits = {
-        "S1": {},
-        "S3": {
+        "season_holdout": {},
+        "loso_cv": {
             "folds": [
                 {"fold_index": 0, "val": ["g1", "g2"]},
                 {"fold_index": 1, "val": ["g3"]},
@@ -366,12 +366,12 @@ def test_validate_prediction_coverage_s3_happy() -> None:
         "pred_home": [1.0, 2.0, 3.0],
         "pred_away": [1.0, 2.0, 3.0],
     })
-    validate_prediction_coverage(preds, _key("c", "S3"), splits)
+    validate_prediction_coverage(preds, _key("c", "loso_cv"), splits)
 
 
 def test_validate_prediction_coverage_s3_extra_fold_fails() -> None:
     splits = {
-        "S3": {
+        "loso_cv": {
             "folds": [{"fold_index": 0, "val": ["g1"]}],
         }
     }
@@ -382,12 +382,12 @@ def test_validate_prediction_coverage_s3_extra_fold_fails() -> None:
         "pred_away": [1.0, 2.0],
     })
     with pytest.raises(PredictionCoverageError, match="unknown fold_index"):
-        validate_prediction_coverage(preds, _key("c", "S3"), splits)
+        validate_prediction_coverage(preds, _key("c", "loso_cv"), splits)
 
 
 def test_validate_prediction_coverage_s3_fold_diverges_fails() -> None:
     splits = {
-        "S3": {
+        "loso_cv": {
             "folds": [{"fold_index": 0, "val": ["g1", "g2"]}],
         }
     }
@@ -398,4 +398,4 @@ def test_validate_prediction_coverage_s3_fold_diverges_fails() -> None:
         "pred_away": [1.0],
     })
     with pytest.raises(PredictionCoverageError, match="fold_index=0"):
-        validate_prediction_coverage(preds, _key("c", "S3"), splits)
+        validate_prediction_coverage(preds, _key("c", "loso_cv"), splits)

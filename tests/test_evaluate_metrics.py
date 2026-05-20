@@ -233,7 +233,7 @@ def _make_s3_frame_3folds_with_overlap() -> pd.DataFrame:
 
 def test_iter_cells_s1_yields_val_then_test_in_order() -> None:
     frame = _make_s1_frame()
-    cells = list(iter_cells(frame, "S1"))
+    cells = list(iter_cells(frame, "season_holdout"))
     assert [c.slice_name for c in cells] == ["val", "test"]
     assert len(cells[0].games) == 2  # val
     assert len(cells[1].games) == 2  # test
@@ -241,7 +241,7 @@ def test_iter_cells_s1_yields_val_then_test_in_order() -> None:
 
 def test_iter_cells_s3_yields_per_fold_then_pooled_with_repeats() -> None:
     frame = _make_s3_frame_3folds_with_overlap()
-    cells = list(iter_cells(frame, "S3"))
+    cells = list(iter_cells(frame, "loso_cv"))
     assert [c.slice_name for c in cells] == ["fold_0", "fold_1", "fold_2", "pooled"]
     assert [len(c.games) for c in cells] == [2, 1, 1, 4]
     pooled = cell_metrics(cells[-1])

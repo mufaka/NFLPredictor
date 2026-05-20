@@ -61,7 +61,7 @@ def _headline_fixture() -> dict:
     return {
         "combinations": {
             # Insertion order intentionally not lexicographic to verify sort_keys=True.
-            "rung2_linear__flat__s1": {
+            "rung2_linear__flat__season_holdout": {
                 "val": {
                     "n_games": 3,
                     "mae": 1.0,
@@ -85,7 +85,7 @@ def _headline_fixture() -> dict:
                     "total_mae": 2.0,
                 },
             },
-            "rung0_mean__none__s1": {
+            "rung0_mean__none__season_holdout": {
                 "val": {
                     "n_games": 3,
                     "mae": 5.0,
@@ -123,7 +123,7 @@ def test_headline_round_trip_and_combination_order(tmp_path: pathlib.Path) -> No
     combo_keys = list(loaded["combinations"].keys())
     assert combo_keys == sorted(combo_keys)
     # Per-combo metric keys sorted alphabetically (EV-OUT-01 sort_keys=True).
-    val_keys = list(loaded["combinations"]["rung0_mean__none__s1"]["val"].keys())
+    val_keys = list(loaded["combinations"]["rung0_mean__none__season_holdout"]["val"].keys())
     assert val_keys == sorted(val_keys)
 
 
@@ -155,7 +155,7 @@ def test_headline_json_indent_is_two_spaces(tmp_path: pathlib.Path) -> None:
 def _breakdown_fixture_week() -> pd.DataFrame:
     """A 4-row by_week breakdown frame across 2 combinations."""
     rows = []
-    for combo in ("rung0_mean__none__s1", "rung2_linear__flat__s1"):
+    for combo in ("rung0_mean__none__season_holdout", "rung2_linear__flat__season_holdout"):
         for week in (1, 2):
             rows.append({
                 "combination_id": combo,
@@ -351,11 +351,11 @@ def _populate_evaluation_dir(eval_dir: pathlib.Path) -> dict[str, pathlib.Path]:
         paths[f"br_{name}"] = p
     # Plot families.
     for fname in (
-        "rung0_mean__none__s1__val__scatter.png",
-        "rung0_mean__none__s1__val__residuals.png",
-        "rung0_mean__none__s1__val__by_week.png",
-        "rung0_mean__none__s1__val__by_team.png",
-        "rung0_mean__none__s1__val__by_home_away.png",
+        "rung0_mean__none__season_holdout__val__scatter.png",
+        "rung0_mean__none__season_holdout__val__residuals.png",
+        "rung0_mean__none__season_holdout__val__by_week.png",
+        "rung0_mean__none__season_holdout__val__by_team.png",
+        "rung0_mean__none__season_holdout__val__by_home_away.png",
         "ladder_summary__val.png",
         "ladder_summary__pooled.png",
     ):
@@ -424,10 +424,10 @@ def test_cleanup_disabled_scatter_deletes_only_scatter_pngs(tmp_path: pathlib.Pa
         scatter=False,
     )
     cleanup_disabled_outputs(eval_dir, cfg)
-    assert not files["pl_rung0_mean__none__s1__val__scatter.png"].exists()
+    assert not files["pl_rung0_mean__none__season_holdout__val__scatter.png"].exists()
     # Residual, by_week, ladder, etc. survive.
-    assert files["pl_rung0_mean__none__s1__val__residuals.png"].exists()
-    assert files["pl_rung0_mean__none__s1__val__by_week.png"].exists()
+    assert files["pl_rung0_mean__none__season_holdout__val__residuals.png"].exists()
+    assert files["pl_rung0_mean__none__season_holdout__val__by_week.png"].exists()
     assert files["pl_ladder_summary__val.png"].exists()
     assert files["foreign"].exists()
 
@@ -445,7 +445,7 @@ def test_cleanup_disabled_ladder_deletes_all_ladder_pngs(tmp_path: pathlib.Path)
     cleanup_disabled_outputs(eval_dir, cfg)
     assert not files["pl_ladder_summary__val.png"].exists()
     assert not files["pl_ladder_summary__pooled.png"].exists()
-    assert files["pl_rung0_mean__none__s1__val__scatter.png"].exists()
+    assert files["pl_rung0_mean__none__season_holdout__val__scatter.png"].exists()
 
 
 def test_cleanup_disabled_breakdown_plots_deletes_dim_pngs(tmp_path: pathlib.Path) -> None:
@@ -460,10 +460,10 @@ def test_cleanup_disabled_breakdown_plots_deletes_dim_pngs(tmp_path: pathlib.Pat
         breakdown_plots=("by_week",),  # by_team and by_home_away plots are off
     )
     cleanup_disabled_outputs(eval_dir, cfg)
-    assert not files["pl_rung0_mean__none__s1__val__by_team.png"].exists()
-    assert not files["pl_rung0_mean__none__s1__val__by_home_away.png"].exists()
+    assert not files["pl_rung0_mean__none__season_holdout__val__by_team.png"].exists()
+    assert not files["pl_rung0_mean__none__season_holdout__val__by_home_away.png"].exists()
     # by_week stays
-    assert files["pl_rung0_mean__none__s1__val__by_week.png"].exists()
+    assert files["pl_rung0_mean__none__season_holdout__val__by_week.png"].exists()
 
 
 def test_cleanup_is_noop_when_evaluation_dir_empty(tmp_path: pathlib.Path) -> None:

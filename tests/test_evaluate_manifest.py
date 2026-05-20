@@ -36,11 +36,11 @@ REQUIRED_MANIFEST_KEYS: set[str] = {
 def _headline() -> dict:
     return {
         "combinations": {
-            "rung0_mean__none__s1": {
+            "rung0_mean__none__season_holdout": {
                 "val": {"n_games": 3, "mae": 5.0},
                 "test": {"n_games": 2, "mae": 6.0},
             },
-            "rung2_linear__flat__s3": {
+            "rung2_linear__flat__loso_cv": {
                 "fold_0": {"n_games": 2, "mae": 4.0},
                 "fold_1": {"n_games": 2, "mae": 3.5},
                 "pooled": {"n_games": 4, "mae": 3.75},
@@ -56,7 +56,7 @@ def _headline() -> dict:
 
 def test_evaluation_summary_s1_shape() -> None:
     summary = build_evaluation_summary(_headline(), "mae")
-    s1 = summary["rung0_mean__none__s1"]
+    s1 = summary["rung0_mean__none__season_holdout"]
     assert set(s1.keys()) == {"val", "test"}
     assert s1["val"] == 5.0
     assert s1["test"] == 6.0
@@ -64,7 +64,7 @@ def test_evaluation_summary_s1_shape() -> None:
 
 def test_evaluation_summary_s3_shape() -> None:
     summary = build_evaluation_summary(_headline(), "mae")
-    s3 = summary["rung2_linear__flat__s3"]
+    s3 = summary["rung2_linear__flat__loso_cv"]
     assert set(s3.keys()) == {"pooled", "mean_per_fold", "per_fold"}
     assert s3["pooled"] == 3.75
     assert s3["per_fold"] == [4.0, 3.5]
@@ -75,14 +75,14 @@ def test_evaluation_summary_handles_null_cells() -> None:
     """Empty cells (n_games=0) show up as None values in the summary."""
     headline = {
         "combinations": {
-            "rung0_mean__none__s1": {
+            "rung0_mean__none__season_holdout": {
                 "val": {"n_games": 0, "mae": None},
                 "test": {"n_games": 0, "mae": None},
             },
         }
     }
     summary = build_evaluation_summary(headline, "mae")
-    s1 = summary["rung0_mean__none__s1"]
+    s1 = summary["rung0_mean__none__season_holdout"]
     assert s1["val"] is None
     assert s1["test"] is None
 
@@ -90,7 +90,7 @@ def test_evaluation_summary_handles_null_cells() -> None:
 def test_evaluation_summary_s3_all_null_mean_is_null() -> None:
     headline = {
         "combinations": {
-            "x__none__s3": {
+            "x__none__loso_cv": {
                 "fold_0": {"n_games": 0, "mae": None},
                 "fold_1": {"n_games": 0, "mae": None},
                 "pooled": {"n_games": 0, "mae": None},
@@ -98,7 +98,7 @@ def test_evaluation_summary_s3_all_null_mean_is_null() -> None:
         }
     }
     summary = build_evaluation_summary(headline, "mae")
-    s3 = summary["x__none__s3"]
+    s3 = summary["x__none__loso_cv"]
     assert s3["pooled"] is None
     assert s3["mean_per_fold"] is None
     assert s3["per_fold"] == [None, None]
@@ -126,7 +126,7 @@ def test_manifest_has_all_required_keys(tmp_path: pathlib.Path) -> None:
         phase4_source_sha256={"z": "3"},
         output_sha256={"out": "4"},
         phase4_manifest_git_commit="deadbeef",
-        combination_ids=["rung2_linear__flat__s3", "rung0_mean__none__s1"],
+        combination_ids=["rung2_linear__flat__loso_cv", "rung0_mean__none__season_holdout"],
         evaluation_summary=summary,
         matplotlib_version="3.10.9",
         numpy_version="2.0.0",
@@ -136,8 +136,8 @@ def test_manifest_has_all_required_keys(tmp_path: pathlib.Path) -> None:
     assert set(manifest.keys()) == REQUIRED_MANIFEST_KEYS
     # combination_ids re-sorted lexicographically.
     assert manifest["combination_ids"] == [
-        "rung0_mean__none__s1",
-        "rung2_linear__flat__s3",
+        "rung0_mean__none__season_holdout",
+        "rung2_linear__flat__loso_cv",
     ]
     # Hash maps are sorted.
     assert list(manifest["phase2_source_sha256"].keys()) == ["x"]

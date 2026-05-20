@@ -92,15 +92,15 @@ def test_real_phase4_build_emits_expected_surface(tmp_path: pathlib.Path) -> Non
     # (a) every combination in training_manifest.json appears in metrics_headline.json
     assert sorted(headline["combinations"].keys()) == expected_combos
 
-    # (b) every S1 combo has both val and test entries.
+    # (b) every season_holdout combo has both val and test entries.
     for combo_id, per_combo in headline["combinations"].items():
-        if combo_id.endswith("__s1"):
+        if combo_id.endswith("__season_holdout"):
             assert set(per_combo.keys()) == {"val", "test"}, combo_id
 
-    # (c) every S3 combo has fold_0..fold_<n-1> and pooled.
+    # (c) every loso_cv combo has fold_0..fold_<n-1> and pooled.
     fold_count = None
     for combo_id, per_combo in headline["combinations"].items():
-        if not combo_id.endswith("__s3"):
+        if not combo_id.endswith("__loso_cv"):
             continue
         keys = set(per_combo.keys())
         assert "pooled" in keys, combo_id

@@ -214,20 +214,20 @@ def iter_cells(
 ) -> Iterator[Cell]:
     """Yield per-slice cells in the canonical EV-COMB-05 order.
 
-    S1 → ``["val", "test"]``
-    S3 → ``["fold_0", ..., "fold_<n-1>", "pooled"]``
+    season_holdout → ``["val", "test"]``
+    loso_cv → ``["fold_0", ..., "fold_<n-1>", "pooled"]``
 
-    For S3, fold ordering is by ascending ``fold_index``; the pooled cell
+    For loso_cv, fold ordering is by ascending ``fold_index``; the pooled cell
     concatenates every fold's rows (duplicates preserved per EV-MET-07).
     Empty slices still yield a Cell with a 0-row frame so EV-MET-09 fires.
     """
-    if strategy == "S1":
+    if strategy == "season_holdout":
         for slice_name in ("val", "test"):
             mask = predictions_with_labels["slice"] == slice_name
             yield Cell(slice_name=slice_name, games=predictions_with_labels.loc[mask])
         return
-    if strategy != "S3":
-        raise ValueError(f"unknown strategy {strategy!r}; expected 'S1' or 'S3'")
+    if strategy != "loso_cv":
+        raise ValueError(f"unknown strategy {strategy!r}; expected 'season_holdout' or 'loso_cv'")
 
     fold_indices = sorted(
         int(x) for x in predictions_with_labels["fold_index"].unique()
@@ -239,7 +239,7 @@ def iter_cells(
             games=predictions_with_labels.loc[mask],
         )
     # Pooled — concat all fold rows (duplicates preserved per EV-MET-07).
-    # Since each row already belongs to exactly one fold_index in S3, the
+    # Since each row already belongs to exactly one fold_index in loso_cv, the
     # "concatenation" is just every row; if a GameId happens to appear in
     # multiple folds it counts twice, as the spec requires.
     yield Cell(slice_name="pooled", games=predictions_with_labels)
@@ -261,7 +261,7 @@ def build_headline_for_combination(
 ) -> dict[str, Any]:
     """Per-combination headline block: ``{slice_name: {n_games, *metrics}, ...}``.
 
-    Slice key insertion order follows EV-COMB-05 (S1: val→test; S3: fold_0→...→pooled).
+    Slice key insertion order follows EV-COMB-05 (season_holdout: val→test; loso_cv: fold_0→...→pooled).
     Actual on-disk JSON ordering is determined by ``json.dump(sort_keys=True)`` per
     EV-OUT-01, which sorts keys alphabetically. The in-memory ordering preserved here
     is informational only.

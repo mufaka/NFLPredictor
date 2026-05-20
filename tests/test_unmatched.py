@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from nflpredictor.databuild.matching import MatchResult, Starter
 from nflpredictor.databuild.unmatched import (
@@ -56,154 +55,30 @@ def test_collect_ignores_matched_starters():
     assert [u.name for u in unmatched] == ["Ghost"]
 
 
+def _madden_row(madden_id: str, team: str, position: str, fullname: str,
+                overall: int, archetype: str) -> dict[str, str]:
+    """Build one assigned-ID Madden row in the multi-year (56-column) schema."""
+    row: dict[str, str] = {
+        "madden_id": madden_id,
+        "team": team,
+        "season": "2024",
+        "fullname": fullname,
+        "position": position,
+    }
+    for col in NUMERIC_COLUMNS:
+        row[col] = "55"
+    row["overallrating"] = str(overall)
+    for col in CATEGORICAL_COLUMNS:
+        row[col] = "common"
+    row["archetype"] = archetype
+    return row
+
+
 def _tiny_madden_with_ids() -> pd.DataFrame:
-    rows = [
-        {
-            "madden_id": "2024-00001",
-            "Team": "Chiefs",
-            "Position": "QB",
-            "Full Name": "Patrick Mahomes",
-            "Overall Rating": "97",
-            "Jersey Number": "15",
-            "Speed": "80",
-            "Acceleration": "82",
-            "Strength": "80",
-            "Agility": "85",
-            "Awareness": "99",
-            "Catching": "60",
-            "Carrying": "60",
-            "Throw Power": "97",
-            "Kick Power": "55",
-            "Kick Accuracy": "55",
-            "Run Block": "30",
-            "Pass Block": "40",
-            "Tackle": "30",
-            "Break Tackle": "55",
-            "Jumping": "70",
-            "Kick Return": "30",
-            "Injury": "90",
-            "Stamina": "92",
-            "Toughness": "92",
-            "Trucking": "55",
-            "Change Of Direction": "85",
-            "Ball Carrier Vision": "75",
-            "Stiff Arm": "40",
-            "Spin Move": "55",
-            "Juke Move": "60",
-            "Impact Blocking": "30",
-            "Run Block Power": "30",
-            "Run Block Finesse": "30",
-            "Pass Block Power": "30",
-            "Pass Block Finesse": "30",
-            "Lead Block": "30",
-            "Break Sack": "75",
-            "Throw Under Pressure": "95",
-            "Power Moves": "30",
-            "Finesse Moves": "30",
-            "Block Shedding": "30",
-            "Pursuit": "40",
-            "Play Recognition": "85",
-            "Man Coverage": "30",
-            "Zone Coverage": "30",
-            "Spectacular Catch": "55",
-            "Catch In Traffic": "55",
-            "Short Route Running": "55",
-            "Medium Route Running": "55",
-            "Deep Route Running": "55",
-            "Hit Power": "30",
-            "Press": "30",
-            "Release": "55",
-            "Throw Accuracy Short": "94",
-            "Throw Accuracy Mid": "94",
-            "Throw Accuracy Deep": "92",
-            "Play Action": "95",
-            "Throw On The Run": "98",
-            "Height": "75",
-            "Weight": "230",
-            "Age": "28",
-            "Birthdate": "34000",
-            "Years Pro": "7",
-            "Running Style": "Default Stride Loose",
-            "Archetype": "QB_Improviser",
-            "College": "Texas Tech",
-            "Total Salary": "60000000",
-            "Signing Bonus": "10000000",
-            "Player Handness": "Right",
-        },
-        {
-            "madden_id": "2024-00002",
-            "Team": "Chiefs",
-            "Position": "TE",
-            "Full Name": "Travis Kelce",
-            "Overall Rating": "89",
-            "Jersey Number": "87",
-            "Speed": "82",
-            "Acceleration": "84",
-            "Strength": "75",
-            "Agility": "82",
-            "Awareness": "95",
-            "Catching": "95",
-            "Carrying": "70",
-            "Throw Power": "30",
-            "Kick Power": "30",
-            "Kick Accuracy": "30",
-            "Run Block": "60",
-            "Pass Block": "50",
-            "Tackle": "30",
-            "Break Tackle": "70",
-            "Jumping": "82",
-            "Kick Return": "30",
-            "Injury": "85",
-            "Stamina": "88",
-            "Toughness": "88",
-            "Trucking": "65",
-            "Change Of Direction": "82",
-            "Ball Carrier Vision": "70",
-            "Stiff Arm": "70",
-            "Spin Move": "60",
-            "Juke Move": "70",
-            "Impact Blocking": "60",
-            "Run Block Power": "60",
-            "Run Block Finesse": "55",
-            "Pass Block Power": "50",
-            "Pass Block Finesse": "50",
-            "Lead Block": "60",
-            "Break Sack": "30",
-            "Throw Under Pressure": "30",
-            "Power Moves": "30",
-            "Finesse Moves": "30",
-            "Block Shedding": "30",
-            "Pursuit": "30",
-            "Play Recognition": "75",
-            "Man Coverage": "30",
-            "Zone Coverage": "30",
-            "Spectacular Catch": "85",
-            "Catch In Traffic": "92",
-            "Short Route Running": "90",
-            "Medium Route Running": "92",
-            "Deep Route Running": "85",
-            "Hit Power": "30",
-            "Press": "30",
-            "Release": "85",
-            "Throw Accuracy Short": "30",
-            "Throw Accuracy Mid": "30",
-            "Throw Accuracy Deep": "30",
-            "Play Action": "55",
-            "Throw On The Run": "55",
-            "Height": "77",
-            "Weight": "260",
-            "Age": "34",
-            "Birthdate": "32100",
-            "Years Pro": "11",
-            "Running Style": "Default Stride Loose",
-            "Archetype": "TE_Vertical",
-            "College": "Cincinnati",
-            "Total Salary": "14000000",
-            "Signing Bonus": "5000000",
-            "Player Handness": "Right",
-        },
-    ]
-    return pd.DataFrame(rows)
+    return pd.DataFrame([
+        _madden_row("2024-00001", "KC", "QB", "Patrick Mahomes", 97, "QB_Improviser"),
+        _madden_row("2024-00002", "KC", "TE", "Travis Kelce", 89, "TE_Vertical"),
+    ])
 
 
 def test_append_unmatched_rows_assigns_ids_and_sets_matched():
@@ -217,12 +92,13 @@ def test_append_unmatched_rows_assigns_ids_and_sets_matched():
             first_game_id_seen="g1",
         ),
     ]
-    appended, assignments = append_unmatched_rows(base, unmatched)
+    appended, assignments = append_unmatched_rows(base, unmatched, 2024)
     assert len(appended) == 3
     assert appended.iloc[2]["madden_id"] == "2024-00003"
-    assert appended.iloc[2]["Team"] == "Bills"
-    assert appended.iloc[2]["Position"] == "QB"
-    assert appended.iloc[2]["Full Name"] == "John Doe"
+    assert appended.iloc[2]["team"] == "BUF"
+    assert appended.iloc[2]["season"] == "2024"
+    assert appended.iloc[2]["position"] == "QB"
+    assert appended.iloc[2]["fullname"] == "John Doe"
     assert appended.iloc[2][MATCHED_COLUMN] == "0"
     assert (appended.iloc[:2][MATCHED_COLUMN] == "1").all()
     assert assignments == {("john doe", "buf"): "2024-00003"}
@@ -236,10 +112,10 @@ def test_append_unmatched_sort_order_matches_db_id_03():
         UnmatchedPlayer("Alpha", "buf", "QB", "alpha", "g3"),
         UnmatchedPlayer("Beta", "buf", "QB", "alpha", "g1"),   # same norm name, earlier game
     ]
-    appended, assignments = append_unmatched_rows(base, unmatched)
+    appended, assignments = append_unmatched_rows(base, unmatched, 2024)
     appended_rows = appended.iloc[2:]
     # Expect sort: (team_code asc, normalized_name asc, first_game_id_seen asc)
-    assert list(appended_rows["Full Name"]) == ["Beta", "Alpha", "Zed"]
+    assert list(appended_rows["fullname"]) == ["Beta", "Alpha", "Zed"]
     assert list(appended_rows["madden_id"]) == [
         "2024-00003", "2024-00004", "2024-00005",
     ]
@@ -250,14 +126,13 @@ def test_compute_and_fill_values():
     unmatched = [
         UnmatchedPlayer("John Doe", "buf", "QB", "john doe", "g1"),
     ]
-    appended, _ = append_unmatched_rows(base, unmatched)
+    appended, _ = append_unmatched_rows(base, unmatched, 2024)
     fill = compute_fill_values(appended)
-    # Mean Overall Rating across matched=1 rows (97, 89) = 93.0
-    assert fill["Overall Rating"] == "93.0000"
-    # Categorical mode on a 2-row table with ties uses lex-smallest.
-    # Both Archetype values differ; lex-smallest wins.
-    assert fill["Archetype"] in {"QB_Improviser", "TE_Vertical"}
-    # No null fill for `matched` itself or for the identity columns.
+    # Mean overallrating across matched=1 rows (97, 89) = 93.0
+    assert fill["overallrating"] == "93.0000"
+    # Categorical mode: distinct archetypes → lex-smallest wins.
+    assert fill["archetype"] in {"QB_Improviser", "TE_Vertical"}
+    # No null fill for `matched` itself.
     assert MATCHED_COLUMN not in fill
 
     filled = fill_unmatched_rows(appended, fill)
@@ -265,36 +140,36 @@ def test_compute_and_fill_values():
     # No null cell on a matched=0 row (DB-OUT-13 precondition).
     assert not (unmatched_row == "").any()
     # Identity columns preserved.
-    assert unmatched_row["Team"] == "Bills"
-    assert unmatched_row["Full Name"] == "John Doe"
+    assert unmatched_row["team"] == "BUF"
+    assert unmatched_row["fullname"] == "John Doe"
     # Sanity: numeric mean applied to a known column.
-    assert unmatched_row["Overall Rating"] == "93.0000"
+    assert unmatched_row["overallrating"] == "93.0000"
 
 
 def test_fill_does_not_touch_matched_one_rows():
     """DB-FILL-04: nulls on matched=1 rows must remain null."""
     base = _tiny_madden_with_ids()
-    # Empty an arbitrary cell on a matched=1 row before fill.
-    base.loc[0, "College"] = ""
+    # Empty an arbitrary categorical cell on a matched=1 row before fill.
+    base.loc[0, "runningstyle"] = ""
     base[MATCHED_COLUMN] = "1"
     unmatched = [UnmatchedPlayer("John Doe", "buf", "QB", "john doe", "g1")]
-    appended, _ = append_unmatched_rows(base, unmatched)
+    appended, _ = append_unmatched_rows(base, unmatched, 2024)
     fill = compute_fill_values(appended)
     filled = fill_unmatched_rows(appended, fill)
-    # matched=1 row 0 still has empty College.
-    assert filled.iloc[0]["College"] == ""
+    # matched=1 row 0 still has empty runningstyle.
+    assert filled.iloc[0]["runningstyle"] == ""
     # matched=0 row got the categorical fill.
-    assert filled[filled[MATCHED_COLUMN] == "0"].iloc[0]["College"] != ""
+    assert filled[filled[MATCHED_COLUMN] == "0"].iloc[0]["runningstyle"] != ""
 
 
 def test_mode_lex_tiebreak():
     base = _tiny_madden_with_ids()
-    # Force a tie on Archetype across matched=1 rows.
-    base.loc[0, "Archetype"] = "ZZZ"
-    base.loc[1, "Archetype"] = "AAA"
+    # Force a tie on archetype across matched=1 rows.
+    base.loc[0, "archetype"] = "ZZZ"
+    base.loc[1, "archetype"] = "AAA"
     base[MATCHED_COLUMN] = "1"
-    fill = compute_fill_values(base.assign(**{MATCHED_COLUMN: "1"}))
-    assert fill["Archetype"] == "AAA"
+    fill = compute_fill_values(base)
+    assert fill["archetype"] == "AAA"
 
 
 def test_numeric_categorical_partition_is_complete():

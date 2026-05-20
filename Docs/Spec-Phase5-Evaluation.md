@@ -1,5 +1,7 @@
 # Phase 5: Evaluation Specification
 
+> **Revision note (multi-year).** Revised for the six-season (2020–2025) migration per `Docs/Plan-MultiYear-Migration.md`. The two split strategies are now `season_holdout` and `loso_cv` (replacing the week-based `S1`/`S3`); `season_holdout` predictions carry `val` / `test` slices and `loso_cv` carries per-fold slices, so the `EV-*` metric and breakdown contracts are unchanged in shape. Inputs are the combined `features_*_all.parquet` / `splits_all.json` / Phase 4's `*__season_holdout.parquet` (and `*__loso_cv.parquet` when enabled). Adding a `by_season` breakdown is a natural follow-on now that the universe spans six seasons; it is not yet shipped.
+
 ## 1. Introduction
 
 ### 1.1 Purpose
@@ -16,7 +18,7 @@ In scope:
 - A fixed v1 metric set: **MAE**, **RMSE**, **W/L accuracy**, **spread MAE**, **total MAE** — each computed per `(combination, slice)`, with home/away decomposition where meaningful.
 - A fixed v1 breakdown-dimension set: **by team**, **by week**, **by home/away**, **by surface**, **by roof** — each toggleable via the YAML config.
 - A fixed v1 plot set: **predicted-vs-actual scatter**, **residual distribution**, and **ladder summary** — plus optional per-breakdown plots (error by week, error by team) toggleable via the YAML config.
-- Evaluation of **every prediction parquet emitted by Phase 4 on every run**, with no special test-slice gating: S1.val + S1.test + every S3 fold val are computed unconditionally.
+- Evaluation of **every prediction parquet emitted by Phase 4 on every run**, with no special test-slice gating: season_holdout.val + season_holdout.test + every loso_cv fold val are computed unconditionally.
 - An evaluation manifest recording source SHAs (Phase 2, Phase 3, Phase 4, the config), output SHAs, headline-metric values per combination, matplotlib version, and git commit.
 - Testing requirements that protect determinism (for metric outputs), source-hash pinning, and combination-coverage contracts.
 
@@ -36,11 +38,11 @@ Out of scope:
 | Term | Definition |
 |------|------------|
 | Combination | A `(rung, feature_shape, strategy)` triple — identical to the Phase 4 term. Phase 5 keys all outputs by the same combination ids (the Phase 4 prediction filenames without extension). |
-| Slice | One of `val`, `test`, or `fold_<i>` (the latter for S3 only). Slice is the scoring granularity inside one combination. |
-| Strategy | One of `S1` or `S3`, named identically to Phase 3 and Phase 4. |
+| Slice | One of `val`, `test`, or `fold_<i>` (the latter for loso_cv only). Slice is the scoring granularity inside one combination. |
+| Strategy | One of `season_holdout` or `loso_cv`, named identically to Phase 3 and Phase 4. |
 | Headline metric | **Per-side MAE averaged**: `mean(|pred_home − true_home| + |pred_away − true_away|) / 2`. Same definition as Phase 4's TR-MAN-04 so Phase 5's val MAE numerically matches Phase 4's. |
 | Breakdown | A partition of an evaluated slice's games by one categorical dimension (team, week, home/away, surface, roof). Metrics are recomputed per partition cell. |
-| Pooled (S3) | Metrics computed by concatenating all S3 fold val predictions into a single pool, then evaluating once. Distinct from "mean of per-fold metrics." Both shapes are emitted. |
+| Pooled (loso_cv) | Metrics computed by concatenating all loso_cv fold val predictions into a single pool, then evaluating once. Distinct from "mean of per-fold metrics." Both shapes are emitted. |
 | Calibration plot | A deterministic PNG rendered by matplotlib that visualizes prediction quality (scatter, residual distribution, ladder summary). |
 | Evaluation config | The hand-edited `Data/raw/evaluation_config.yaml` declaring breakdown toggles, plot toggles, headline metric, and plot rendering parameters. |
 | Headline metrics file | `Data/processed/evaluation/metrics_headline.json` — one entry per `(combination, slice)`. |
@@ -64,15 +66,15 @@ Out of scope:
 Data/raw/{box_scores, madden, ..., feature_config}
     │  python -m nflpredictor.databuild
     ▼
-Data/processed/{madden_2024.csv, box_scores_2024.csv,
+Data/processed/{madden_all.csv, box_scores_all.csv,
                 player_id_mapping.csv, build_manifest.json}
     │  python -m nflpredictor.features
     ▼
-Data/processed/{features_flat_2024.parquet, features_pos_2024.parquet,
+Data/processed/{features_flat_all.parquet, features_pos_all.parquet,
                 feature_vocab.json, feature_manifest.json}
     │  python -m nflpredictor.splits
     ▼
-Data/processed/{splits_2024.json, splits_manifest.json}
+Data/processed/{splits_all.json, splits_manifest.json}
     │  python -m nflpredictor.train
     ▼
 Data/processed/predictions/{<rung>__<shape>__<strategy>.parquet × 12,
@@ -85,7 +87,7 @@ Data/processed/evaluation/{metrics_headline.json,
                            evaluation_manifest.json}
 ```
 
-The Phase 5 build refuses to run if any of Phase 2's tracked outputs (`features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`), Phase 3's output (`splits_2024.json`), or any Phase 4 prediction parquet listed in `training_manifest.json → output_sha256` is missing or has an on-disk SHA-256 that disagrees with its upstream manifest. This guarantees that evaluation outputs are always pinned to a specific Phase 4 run on top of specific Phase 2 and Phase 3 builds.
+The Phase 5 build refuses to run if any of Phase 2's tracked outputs (`features_flat_all.parquet`, `features_pos_all.parquet`, `feature_vocab.json`), Phase 3's output (`splits_all.json`), or any Phase 4 prediction parquet listed in `training_manifest.json → output_sha256` is missing or has an on-disk SHA-256 that disagrees with its upstream manifest. This guarantees that evaluation outputs are always pinned to a specific Phase 4 run on top of specific Phase 2 and Phase 3 builds.
 
 ---
 
@@ -110,16 +112,16 @@ The build is executable from the repository root via `python -m nflpredictor.eva
 
 | ID | Requirement |
 |----|-------------|
-| EV-IN-01 | The build shall read `Data/processed/features_flat_2024.parquet`, `Data/processed/features_pos_2024.parquet`, `Data/processed/feature_vocab.json`, and `Data/processed/feature_manifest.json` as Phase 2 inputs. It uses `features_flat_2024.parquet` as the canonical source for labels (`home_score`, `away_score`) and breakdown columns; `features_pos_2024.parquet` is consulted only to verify label parity with `features_flat_2024.parquet` (EV-NF-02). |
-| EV-IN-02 | The build shall read `Data/processed/splits_2024.json` and `Data/processed/splits_manifest.json` as Phase 3 inputs. |
+| EV-IN-01 | The build shall read `Data/processed/features_flat_all.parquet`, `Data/processed/features_pos_all.parquet`, `Data/processed/feature_vocab.json`, and `Data/processed/feature_manifest.json` as Phase 2 inputs. It uses `features_flat_all.parquet` as the canonical source for labels (`home_score`, `away_score`) and breakdown columns; `features_pos_all.parquet` is consulted only to verify label parity with `features_flat_all.parquet` (EV-NF-02). |
+| EV-IN-02 | The build shall read `Data/processed/splits_all.json` and `Data/processed/splits_manifest.json` as Phase 3 inputs. |
 | EV-IN-03 | The build shall read every Phase 4 prediction parquet enumerated in `training_manifest.json → output_sha256` (excluding the manifest itself) plus `Data/processed/training_manifest.json` as Phase 4 inputs. |
 | EV-IN-04 | The build shall read `Data/raw/evaluation_config.yaml` as a secondary input. The file is required; the build shall fail fast if it is missing. |
 | EV-IN-05 | The build shall not modify any file under `Data/raw/`, any Phase 1, Phase 2, Phase 3, or Phase 4 output under `Data/processed/`, or any Phase 4 prediction parquet under `Data/processed/predictions/`. |
-| EV-IN-06 | The build shall recompute the SHA-256 of each Phase 2 tracked output (`features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`) and compare each to the corresponding `output_sha256` entry in `feature_manifest.json`. On any mismatch the build shall fail fast with a clear error naming the divergent file. |
-| EV-IN-07 | The build shall recompute the SHA-256 of `splits_2024.json` and compare it to the corresponding `output_sha256` entry in `splits_manifest.json`. On mismatch the build shall fail fast. |
+| EV-IN-06 | The build shall recompute the SHA-256 of each Phase 2 tracked output (`features_flat_all.parquet`, `features_pos_all.parquet`, `feature_vocab.json`) and compare each to the corresponding `output_sha256` entry in `feature_manifest.json`. On any mismatch the build shall fail fast with a clear error naming the divergent file. |
+| EV-IN-07 | The build shall recompute the SHA-256 of `splits_all.json` and compare it to the corresponding `output_sha256` entry in `splits_manifest.json`. On mismatch the build shall fail fast. |
 | EV-IN-08 | The build shall recompute the SHA-256 of each Phase 4 prediction parquet and compare it to the corresponding `output_sha256` entry in `training_manifest.json`. On mismatch the build shall fail fast with a clear error naming the divergent file. |
 | EV-IN-09 | The build shall reject (fail-fast) any `evaluation_config.yaml` whose schema does not satisfy §3.2. |
-| EV-IN-10 | The build shall verify that every prediction parquet's `GameId` set is a subset of `splits_2024.json → S1.all_games`, and that every S1 parquet's `slice = "val"` rows exactly match `S1.val`, every `slice = "test"` rows exactly match `S1.test`, and every S3 parquet's `fold_index = i` rows exactly match `S3.folds[i].val`. On mismatch the build shall fail fast. (This is a defensive cross-check; Phase 4 already enforces these contracts on emission, but Phase 5 re-validates because the parquets may have been touched in transit.) |
+| EV-IN-10 | The build shall verify that every prediction parquet's `GameId` set is a subset of `splits_all.json → season_holdout.all_games`, and that every season_holdout parquet's `slice = "val"` rows exactly match `season_holdout.val`, every `slice = "test"` rows exactly match `season_holdout.test`, and every loso_cv parquet's `fold_index = i` rows exactly match `loso_cv.folds[i].val`. On mismatch the build shall fail fast. (This is a defensive cross-check; Phase 4 already enforces these contracts on emission, but Phase 5 re-validates because the parquets may have been touched in transit.) |
 
 ### 3.2 Evaluation Config Schema
 
@@ -157,7 +159,7 @@ The default `evaluation_config.yaml` shipped in the repo declares the following.
 
 ### 3.4 Metric Definitions
 
-All metrics in this section are computed over the games in a single `(combination, slice)` cell. `pred_home`, `pred_away` come from the relevant Phase 4 prediction parquet; `true_home`, `true_away` come from `features_flat_2024.parquet`'s label columns joined on `GameId`.
+All metrics in this section are computed over the games in a single `(combination, slice)` cell. `pred_home`, `pred_away` come from the relevant Phase 4 prediction parquet; `true_home`, `true_away` come from `features_flat_all.parquet`'s label columns joined on `GameId`.
 
 | ID | Requirement |
 |----|-------------|
@@ -167,7 +169,7 @@ All metrics in this section are computed over the games in a single `(combinatio
 | EV-MET-04 | **W/L accuracy.** Predicted winner = `sign(pred_home − pred_away)`; actual winner = `sign(true_home − true_away)`. `wl_accuracy = mean(predicted_winner == actual_winner)`. Ties on the prediction side (`pred_home == pred_away`) shall count as incorrect unless the actual result is also a tie; ties on the actual side (`true_home == true_away`) shall count as correct only if the prediction is also a tie. Tied games are rare but the rule is explicit so v1 is reproducible. |
 | EV-MET-05 | **Spread MAE.** `spread_mae = mean(|(pred_home − pred_away) − (true_home − true_away)|)`. |
 | EV-MET-06 | **Total MAE.** `total_mae = mean(|(pred_home + pred_away) − (true_home + true_away)|)`. |
-| EV-MET-07 | **n_games** shall be emitted alongside every metric cell: the count of games contributing to that cell. For S1 cells `n_games` equals the cell's slice size; for S3 per-fold cells it equals that fold's val size; for S3 pooled cells it equals the sum across folds (with repeats if a GameId appears in multiple folds — the S3 expanding-window protocol allows this). |
+| EV-MET-07 | **n_games** shall be emitted alongside every metric cell: the count of games contributing to that cell. For season_holdout cells `n_games` equals the cell's slice size; for loso_cv per-fold cells it equals that fold's val size; for loso_cv pooled cells it equals the sum across folds (with repeats if a GameId appears in multiple folds — the loso_cv expanding-window protocol allows this). |
 | EV-MET-08 | All metric floats shall be serialized to JSON with 6-digit precision (Python's default `json.dump` writes IEEE 754 round-trip; the build shall not truncate further). Parquet float columns retain `float64` precision. |
 | EV-MET-09 | When `n_games == 0` for a cell (a possible edge case for empty breakdown buckets — e.g., a team with no games in a given val slice), the metric values shall be JSON `null` (parquet `null`) and `n_games` shall be `0`. The build shall not raise on empty cells. |
 
@@ -175,11 +177,11 @@ All metrics in this section are computed over the games in a single `(combinatio
 
 | ID | Requirement |
 |----|-------------|
-| EV-COMB-01 | The build shall enumerate combinations by reading the prediction-parquet filenames listed in `training_manifest.json → output_sha256` (i.e., the keys under `predictions/`). The combination id is the filename stem (e.g., `rung2_linear__flat__s1`). The build does not re-derive combinations from `training_config.yaml`. |
-| EV-COMB-02 | For an **S1** combination (filename ends with `__s1`), the build shall compute metrics independently for `slice = "val"` and `slice = "test"`, populating both rows in the headline file and contributing both slices to every relevant breakdown. |
-| EV-COMB-03 | For an **S3** combination (filename ends with `__s3`), the build shall compute metrics independently for each `fold_index ∈ {0..fold_count-1}` and additionally compute one **pooled** metric set (EV-MET-07 defines `n_games`). Both per-fold and pooled rows shall appear in the headline file and contribute to every relevant breakdown. |
+| EV-COMB-01 | The build shall enumerate combinations by reading the prediction-parquet filenames listed in `training_manifest.json → output_sha256` (i.e., the keys under `predictions/`). The combination id is the filename stem (e.g., `rung2_linear__flat__season_holdout`). The build does not re-derive combinations from `training_config.yaml`. |
+| EV-COMB-02 | For an **season_holdout** combination (filename ends with `__season_holdout`), the build shall compute metrics independently for `slice = "val"` and `slice = "test"`, populating both rows in the headline file and contributing both slices to every relevant breakdown. |
+| EV-COMB-03 | For an **loso_cv** combination (filename ends with `__loso_cv`), the build shall compute metrics independently for each `fold_index ∈ {0..fold_count-1}` and additionally compute one **pooled** metric set (EV-MET-07 defines `n_games`). Both per-fold and pooled rows shall appear in the headline file and contribute to every relevant breakdown. |
 | EV-COMB-04 | The headline file and every breakdown parquet shall carry every combination present in `training_manifest.json → output_sha256`. The build shall fail fast if any combination's parquet is missing from disk despite being listed in the manifest. |
-| EV-COMB-05 | Combination ordering in all outputs is lexicographic on the combination id (the parquet filename stem). Slice ordering within a combination is: S1 → `["val", "test"]`; S3 → `["fold_0", "fold_1", …, "fold_<n-1>", "pooled"]`. Stable ordering is required by EV-NF-01 (byte determinism). |
+| EV-COMB-05 | Combination ordering in all outputs is lexicographic on the combination id (the parquet filename stem). Slice ordering within a combination is: season_holdout → `["val", "test"]`; loso_cv → `["fold_0", "fold_1", …, "fold_<n-1>", "pooled"]`. Stable ordering is required by EV-NF-01 (byte determinism). |
 
 ### 3.6 Breakdown Dimensions
 
@@ -188,9 +190,9 @@ Each enabled breakdown dimension produces one parquet under `Data/processed/eval
 | ID | Requirement |
 |----|-------------|
 | EV-BRK-01 | **by_team.** Each game contributes two rows: one keyed by `home_team_code`, one by `away_team_code`. `home_or_away` column distinguishes them. Metrics within a team cell are computed over the contributions where that team appears in the indicated role; per-side metrics (`mae_home`, `mae_away`) are reported relative to the home/away role of *the game*, not the role of the queried team. (Rationale: a team's offensive performance contributes to `mae_home` when it plays at home and `mae_away` when away; the breakdown surfaces both views.) |
-| EV-BRK-02 | **by_week.** Each game contributes one row keyed by `week` (integer 1–18 in the 2024 universe). Week is read from `features_flat_2024.parquet`'s `week` column. |
+| EV-BRK-02 | **by_week.** Each game contributes one row keyed by `week` (integer 1–18 in the 2024 universe). Week is read from `features_flat_all.parquet`'s `week` column. |
 | EV-BRK-03 | **by_home_away.** Each game contributes two rows: one with `home_or_away = "home"` reporting `mae_home`, `rmse_home`, etc.; one with `home_or_away = "away"` reporting `mae_away`, `rmse_away`, etc. The remaining columns (`wl_accuracy`, `spread_mae`, `total_mae`) are computed on the whole game and are duplicated across the two rows. |
-| EV-BRK-04 | **by_surface.** Each game contributes one row keyed by `surface` (the categorical code from `features_flat_2024.parquet`'s `surface` column; the int → label lookup uses `feature_vocab.json → surface`). The parquet carries both the integer code and the human-readable label so the file is self-describing. |
+| EV-BRK-04 | **by_surface.** Each game contributes one row keyed by `surface` (the categorical code from `features_flat_all.parquet`'s `surface` column; the int → label lookup uses `feature_vocab.json → surface`). The parquet carries both the integer code and the human-readable label so the file is self-describing. |
 | EV-BRK-05 | **by_roof.** Same shape as `by_surface` but keyed by `roof`. |
 | EV-BRK-06 | Every breakdown parquet shall include the columns enumerated in §4.3 — at minimum: `combination_id`, `slice`, `breakdown_value` (typed per dimension), `breakdown_label` (string, the human-readable form where applicable), `n_games`, plus the five metric families. |
 | EV-BRK-07 | Per-team breakdown values shall use the 3-letter PFR team codes (the same `team_codes` vocab Phase 2 uses for `HomeTeamCode` / `AwayTeamCode`). |
@@ -201,7 +203,7 @@ All plots are PNGs rendered with the matplotlib Agg backend, written to `Data/pr
 
 | ID | Requirement |
 |----|-------------|
-| EV-PLOT-01 | **Predicted-vs-actual scatter.** One PNG per `(combination, slice)` cell where `slice ∈ {"val", "test"}` for S1 combinations and `slice = "pooled"` for S3 combinations. The plot overlays two scatter series (home and away) on a single axis: x = actual score, y = predicted score; identity line `y = x` is drawn. Filename: `<combination_id>__<slice>__scatter.png`. |
+| EV-PLOT-01 | **Predicted-vs-actual scatter.** One PNG per `(combination, slice)` cell where `slice ∈ {"val", "test"}` for season_holdout combinations and `slice = "pooled"` for loso_cv combinations. The plot overlays two scatter series (home and away) on a single axis: x = actual score, y = predicted score; identity line `y = x` is drawn. Filename: `<combination_id>__<slice>__scatter.png`. |
 | EV-PLOT-02 | **Residual distribution.** One PNG per `(combination, slice)` cell on the same slice basis as EV-PLOT-01. The plot is a histogram of `pred − true` residuals with two series (home, away) overlaid. Filename: `<combination_id>__<slice>__residuals.png`. |
 | EV-PLOT-03 | **Ladder summary.** A single PNG `ladder_summary__<slice>.png` is rendered per slice basis `slice ∈ {"val", "test", "pooled"}` — three files total. Each is a grouped bar chart with one bar per combination (lexicographic order), height = `headline_metric` value for that `(combination, slice)`; combinations whose parquet does not contribute to the given slice are omitted. The headline metric shown is the value of `config.headline_metric`. |
 | EV-PLOT-04 | **Per-breakdown plots (configurable).** For each entry in `plots.breakdown_plots`, one PNG per `(combination, slice)` cell on the same slice basis as EV-PLOT-01 is rendered, showing the chosen metric (`headline_metric`) across the breakdown values as a line chart (for `by_week`) or bar chart (for `by_team`, `by_home_away`). Filename: `<combination_id>__<slice>__<dim>.png`. |
@@ -225,12 +227,12 @@ All plots are PNGs rendered with the matplotlib Agg backend, written to `Data/pr
 | ID | Requirement |
 |----|-------------|
 | EV-MAN-01 | The build shall emit `Data/processed/evaluation/evaluation_manifest.json` containing at minimum the keys: `build_timestamp_utc`, `evaluation_version`, `headline_metric`, `evaluation_config_sha256`, `phase2_source_sha256` (object: input filename → SHA), `phase3_source_sha256` (object: input filename → SHA), `phase4_source_sha256` (object: input filename relative to `Data/processed/` → SHA, including `training_manifest.json` and every prediction parquet), `output_sha256` (object: output filename relative to `Data/processed/evaluation/` → SHA, including `metrics_headline.json`, every breakdown parquet, and every PNG), `git_commit` (or `null`), `phase4_manifest_git_commit`, `matplotlib_version`, `numpy_version`, `pyarrow_version`, `combination_ids` (sorted list of evaluated combinations), `evaluation_summary`. |
-| EV-MAN-02 | `evaluation_summary` shall be an object keyed by combination id, with each value containing the headline-metric value per evaluated slice: for S1 keys, `{"val": <float or null>, "test": <float or null>}`; for S3 keys, `{"pooled": <float or null>, "mean_per_fold": <float or null>, "per_fold": [<float>, …]}`. This is a navigation aid; the full per-metric matrix lives in `metrics_headline.json`. |
+| EV-MAN-02 | `evaluation_summary` shall be an object keyed by combination id, with each value containing the headline-metric value per evaluated slice: for season_holdout keys, `{"val": <float or null>, "test": <float or null>}`; for loso_cv keys, `{"pooled": <float or null>, "mean_per_fold": <float or null>, "per_fold": [<float>, …]}`. This is a navigation aid; the full per-metric matrix lives in `metrics_headline.json`. |
 | EV-MAN-03 | The manifest's `build_timestamp_utc` shall be in ISO 8601 UTC format. |
 | EV-MAN-04 | The manifest shall be written **last** — after every metric JSON, breakdown parquet, and PNG — so each output SHA can be computed against the on-disk file. |
 | EV-MAN-05 | The manifest shall be written with sorted keys and stable two-space indentation. Byte-identical inputs and a pinned matplotlib wheel shall produce a byte-identical manifest modulo `build_timestamp_utc`. |
 | EV-MAN-06 | `evaluation_config_sha256` shall be the SHA-256 of the raw `Data/raw/evaluation_config.yaml` file bytes (not the parsed/normalized form). This mirrors Phases 1–4's source-hash discipline. |
-| EV-MAN-07 | No test-slice metric is gated, redacted, or otherwise distinguished in the manifest. S1's test slice appears in `evaluation_summary` and in `metrics_headline.json` unconditionally; the human chooses when to read it. |
+| EV-MAN-07 | No test-slice metric is gated, redacted, or otherwise distinguished in the manifest. season_holdout's test slice appears in `evaluation_summary` and in `metrics_headline.json` unconditionally; the human chooses when to read it. |
 
 ---
 
@@ -265,7 +267,7 @@ plots:
 ```json
 {
   "combinations": {
-    "rung0_mean__none__s1": {
+    "rung0_mean__none__season_holdout": {
       "val": {
         "n_games": 45,
         "mae": 9.87,
@@ -279,7 +281,7 @@ plots:
       },
       "test": { "n_games": 48, "mae": 10.04, "…": "…" }
     },
-    "rung2_linear__flat__s3": {
+    "rung2_linear__flat__loso_cv": {
       "fold_0": { "n_games": 5, "mae": 8.93, "…": "…" },
       "fold_1": { "n_games": 5, "mae": 9.12, "…": "…" },
       "…": "…",
@@ -334,24 +336,24 @@ Row order in every breakdown parquet: lexicographic on `(combination_id, slice, 
   "headline_metric": "mae",
   "evaluation_config_sha256": "…",
   "phase2_source_sha256": {
-    "features_flat_2024.parquet": "…",
-    "features_pos_2024.parquet": "…",
+    "features_flat_all.parquet": "…",
+    "features_pos_all.parquet": "…",
     "feature_vocab.json": "…"
   },
   "phase3_source_sha256": {
-    "splits_2024.json": "…"
+    "splits_all.json": "…"
   },
   "phase4_source_sha256": {
     "training_manifest.json": "…",
-    "predictions/rung0_mean__none__s1.parquet": "…",
-    "predictions/rung0_mean__none__s3.parquet": "…",
+    "predictions/rung0_mean__none__season_holdout.parquet": "…",
+    "predictions/rung0_mean__none__loso_cv.parquet": "…",
     "…": "…"
   },
   "output_sha256": {
     "metrics_headline.json": "…",
     "breakdowns/by_team.parquet": "…",
     "breakdowns/by_week.parquet": "…",
-    "plots/rung2_linear__flat__s1__val__scatter.png": "…",
+    "plots/rung2_linear__flat__season_holdout__val__scatter.png": "…",
     "…": "…"
   },
   "git_commit": "…",
@@ -360,13 +362,13 @@ Row order in every breakdown parquet: lexicographic on `(combination_id, slice, 
   "numpy_version": "2.1.3",
   "pyarrow_version": "17.0.0",
   "combination_ids": [
-    "rung0_mean__none__s1",
-    "rung0_mean__none__s3",
+    "rung0_mean__none__season_holdout",
+    "rung0_mean__none__loso_cv",
     "…"
   ],
   "evaluation_summary": {
-    "rung0_mean__none__s1": { "val": 9.87, "test": 10.04 },
-    "rung2_linear__flat__s3": {
+    "rung0_mean__none__season_holdout": { "val": 9.87, "test": 10.04 },
+    "rung2_linear__flat__loso_cv": {
       "pooled": 8.71,
       "mean_per_fold": 8.69,
       "per_fold": [8.93, 9.12, "…"]
@@ -391,7 +393,7 @@ Row order in every breakdown parquet: lexicographic on `(combination_id, slice, 
 | `Data/processed/evaluation/plots/<combination_id>__<slice>__<dim>.png` | PNG | One per `(combination, slice, dim)` per EV-PLOT-04 (conditional on `plots.breakdown_plots`). |
 | `Data/processed/evaluation/evaluation_manifest.json` | JSON | Build provenance + per-combination headline summary. |
 
-For the v1 default config against Phase 4's v1 default output (12 prediction parquets — 6 S1 + 6 S3), the output set is: 1 headline JSON + 5 breakdown parquets + (12 × ~3 plots per combination + 3 ladder summary plots) ≈ 40 PNGs + 1 manifest. The exact PNG count is a function of which plot families are enabled.
+For the v1 default config against Phase 4's v1 default output (12 prediction parquets — 6 season_holdout + 6 loso_cv), the output set is: 1 headline JSON + 5 breakdown parquets + (12 × ~3 plots per combination + 3 ladder summary plots) ≈ 40 PNGs + 1 manifest. The exact PNG count is a function of which plot families are enabled.
 
 ---
 
@@ -416,7 +418,7 @@ src/nflpredictor/evaluate/
 ### 5.1 Conceptual Stages
 
 1. **Load and validate inputs.** Read `evaluation_config.yaml`; validate per §3.2 and §4.1. Read `feature_manifest.json`, `splits_manifest.json`, and `training_manifest.json`; verify Phase 2, Phase 3, and Phase 4 output SHAs against on-disk files (EV-IN-06, EV-IN-07, EV-IN-08).
-2. **Load features, splits, and predictions into memory.** Read `features_flat_2024.parquet` (labels + breakdown columns), `splits_2024.json`, and every prediction parquet enumerated in `training_manifest.json`. Verify label parity across `flat` and `pos` Phase 2 parquets (EV-NF-02). Cross-validate prediction GameId coverage per EV-IN-10.
+2. **Load features, splits, and predictions into memory.** Read `features_flat_all.parquet` (labels + breakdown columns), `splits_all.json`, and every prediction parquet enumerated in `training_manifest.json`. Verify label parity across `flat` and `pos` Phase 2 parquets (EV-NF-02). Cross-validate prediction GameId coverage per EV-IN-10.
 3. **Enumerate `(combination, slice)` cells.** Per EV-COMB-01..05.
 4. **Compute metrics per cell.** Apply §3.4 to every cell. Build the headline-metrics structure.
 5. **Compute breakdowns.** For each enabled dimension, partition the games in every cell by the breakdown value and recompute the metric stack per partition. Stack into the per-dimension parquet shape (§4.3).
@@ -447,7 +449,7 @@ Not applicable. The evaluation build is a single-shot offline script with no net
 - **Metric set in v1**: MAE (headline, per-side averaged), per-side MAE/RMSE, W/L accuracy, spread MAE, total MAE. All five are always computed; `config.headline_metric` only controls which one is highlighted in stdout summaries and on the ladder-summary plot.
 - **Breakdown dimensions**: by team, by week, by home/away, by surface, by roof — all on by default, individually toggleable.
 - **Plot inventory**: predicted-vs-actual scatter, residual distribution, ladder summary (all on by default); per-week error plot on by default; per-team and per-home/away error plots available but off by default.
-- **Slice scope**: every prediction parquet on every run. Test-slice metrics are computed unconditionally; there is no `--include-test` flag. Phase 4's choice to defer test MAE to Phase 5 (TR-MAN-03) is fully discharged here: `metrics_headline.json` carries `slice = "test"` rows alongside `slice = "val"` rows for every S1 combination.
+- **Slice scope**: every prediction parquet on every run. Test-slice metrics are computed unconditionally; there is no `--include-test` flag. Phase 4's choice to defer test MAE to Phase 5 (TR-MAN-03) is fully discharged here: `metrics_headline.json` carries `slice = "test"` rows alongside `slice = "val"` rows for every season_holdout combination.
 - **Headline-MAE formula equals Phase 4's val-MAE formula**: EV-MET-01 reuses TR-MAN-04 verbatim, and EV-TEST-08 enforces numerical agreement.
 
 The Phase 1, 2, 3, and 4 specs are unchanged. `Docs/Idea.md` §"Phase 5" and §"Remaining Open Questions → Phase 5" require a follow-on edit to mark the open question as resolved; this spec is the source of truth in the interim.
@@ -460,7 +462,7 @@ The Phase 1, 2, 3, and 4 specs are unchanged. `Docs/Idea.md` §"Phase 5" and §"
 |----|-------------|
 | EV-NF-01 | The build shall be deterministic for metric content: identical inputs (Phase 2 outputs, Phase 3 outputs, Phase 4 outputs, `evaluation_config.yaml`) shall produce byte-identical `metrics_headline.json`, byte-identical breakdown parquets, and a byte-identical manifest (excluding `build_timestamp_utc`) across runs. |
 | EV-NF-02 | The build shall be deterministic for PNG content within a pinned matplotlib wheel on the same platform: rerunning with the same matplotlib version produces byte-identical PNGs. Cross-version or cross-platform PNG byte-identity is not asserted; `matplotlib_version` in the manifest is the auditability lever. |
-| EV-NF-03 | At startup, the build shall verify that `features_flat_2024.parquet` and `features_pos_2024.parquet` carry identical `(GameId, home_score, away_score)` triples (same set, same label values). On mismatch the build shall fail fast. This duplicates Phase 4's TR-NF-02 but is repeated here because Phase 5 binds to `flat` for labels and an undetected divergence would silently corrupt metrics. |
+| EV-NF-03 | At startup, the build shall verify that `features_flat_all.parquet` and `features_pos_all.parquet` carry identical `(GameId, home_score, away_score)` triples (same set, same label values). On mismatch the build shall fail fast. This duplicates Phase 4's TR-NF-02 but is repeated here because Phase 5 binds to `flat` for labels and an undetected divergence would silently corrupt metrics. |
 | EV-NF-04 | The build shall be re-runnable: it shall produce correct output regardless of whether the headline JSON, breakdown parquets, PNGs, or manifest exist, are stale, or are absent. Stale outputs matching the §3.10 patterns shall be overwritten; stale outputs for now-disabled breakdowns or plots shall be deleted per EV-OUT-06. |
 | EV-NF-05 | The build shall complete in under 2 minutes for the v1 default config against the v1 Phase 4 output (12 combinations, ~40 PNGs) on a modern 8-core laptop. PNG rendering dominates wall clock; metric computation is sub-second. |
 | EV-NF-06 | The `build_timestamp_utc` field in `evaluation_manifest.json` is the only permitted source of run-to-run output drift in metric artifacts under fixed inputs and matplotlib wheel. |
@@ -489,10 +491,10 @@ Not applicable. The plot PNGs are read by humans but are static artifacts writte
 | EV-TEST-05 | A unit test shall verify the breakdown parquet schemas and row ordering (§4.3): every required column present at the expected type; row order matches EV-OUT-02. |
 | EV-TEST-06 | An integration test shall run the full Phase 5 build against a small synthetic Phase 2 + Phase 3 + Phase 4 stand-in (~30 games, 2 combinations) and assert that the headline JSON, every breakdown parquet, and the manifest match a checked-in expected snapshot (excluding `build_timestamp_utc`). PNG existence is asserted; PNG byte-equality is not (per EV-NF-02). |
 | EV-TEST-07 | A determinism test shall run the evaluation build twice in succession against identical Phase 2, Phase 3, Phase 4, and config inputs and assert byte-equality of `metrics_headline.json`, every breakdown parquet, and the manifest (excluding `build_timestamp_utc`) in the same pinned matplotlib wheel. PNG byte-equality is asserted within the same pinned matplotlib wheel on the same platform per EV-NF-02. |
-| EV-TEST-08 | A cross-phase agreement test shall, against a synthetic Phase 4 stand-in, compute Phase 5's headline MAE for every `S1.val` cell and assert it equals the value Phase 4 recorded in its `training_summaries.<combo>.val_mae` field to float64 precision. The same equality shall hold per-fold for S3 combinations against `training_summaries.<combo>.per_fold[i].val_mae`. (This test prevents Phase 5's formula from silently drifting from Phase 4's.) |
-| EV-TEST-09 | A pinned-identity test shall run the real Phase 5 build against the actual Phase 2, Phase 3, and Phase 4 outputs and assert: (a) every combination in `training_manifest.json` appears in `metrics_headline.json`; (b) every S1 combination has both `val` and `test` entries; (c) every S3 combination has `fold_0` through `fold_<n-1>` and `pooled` entries; (d) every enabled breakdown parquet exists and covers every combination; (e) the manifest's `output_sha256` exactly enumerates the files on disk. This test skips when `Data/processed/predictions/` is empty (the heavy real-data run is expected post-Phase 4 on the CUDA machine, not in CPU CI). |
-| EV-TEST-10 | A source-pinning test shall verify that an EV-IN-06 hash mismatch (e.g., a hand-edited `features_flat_2024.parquet`), an EV-IN-07 hash mismatch (e.g., a hand-edited `splits_2024.json`), and an EV-IN-08 hash mismatch (e.g., a hand-edited prediction parquet) each cause the build to fail fast with a clear error naming the divergent file. |
-| EV-TEST-11 | A test shall verify the test-slice handling: starting from a fresh `Data/processed/evaluation/` directory, a single Phase 5 run produces `slice = "test"` metric entries for every S1 combination without any flag, argument, or config change. |
+| EV-TEST-08 | A cross-phase agreement test shall, against a synthetic Phase 4 stand-in, compute Phase 5's headline MAE for every `season_holdout.val` cell and assert it equals the value Phase 4 recorded in its `training_summaries.<combo>.val_mae` field to float64 precision. The same equality shall hold per-fold for loso_cv combinations against `training_summaries.<combo>.per_fold[i].val_mae`. (This test prevents Phase 5's formula from silently drifting from Phase 4's.) |
+| EV-TEST-09 | A pinned-identity test shall run the real Phase 5 build against the actual Phase 2, Phase 3, and Phase 4 outputs and assert: (a) every combination in `training_manifest.json` appears in `metrics_headline.json`; (b) every season_holdout combination has both `val` and `test` entries; (c) every loso_cv combination has `fold_0` through `fold_<n-1>` and `pooled` entries; (d) every enabled breakdown parquet exists and covers every combination; (e) the manifest's `output_sha256` exactly enumerates the files on disk. This test skips when `Data/processed/predictions/` is empty (the heavy real-data run is expected post-Phase 4 on the CUDA machine, not in CPU CI). |
+| EV-TEST-10 | A source-pinning test shall verify that an EV-IN-06 hash mismatch (e.g., a hand-edited `features_flat_all.parquet`), an EV-IN-07 hash mismatch (e.g., a hand-edited `splits_all.json`), and an EV-IN-08 hash mismatch (e.g., a hand-edited prediction parquet) each cause the build to fail fast with a clear error naming the divergent file. |
+| EV-TEST-11 | A test shall verify the test-slice handling: starting from a fresh `Data/processed/evaluation/` directory, a single Phase 5 run produces `slice = "test"` metric entries for every season_holdout combination without any flag, argument, or config change. |
 
 ---
 
@@ -532,7 +534,7 @@ The following are explicitly out of scope for Phase 5 v1 and recorded so they ar
 - [Spec-Phase4-BaselineLadder.md](./Spec-Phase4-BaselineLadder.md) — Phase 4 specification. Phase 5 reads its prediction parquets and binds to its `training_manifest.json`; the headline-MAE formula (EV-MET-01) reuses Phase 4's TR-MAN-04 verbatim.
 - [Plan-Phase1-DataBuild.md](./Plan-Phase1-DataBuild.md), [Plan-Phase2-FeatureEngineering.md](./Plan-Phase2-FeatureEngineering.md), [Plan-Phase3-Splits.md](./Plan-Phase3-Splits.md), [Plan-Phase4-BaselineLadder.md](./Plan-Phase4-BaselineLadder.md) — Stylistic precedent for the Phase 5 implementation plan to follow.
 - `Data/processed/predictions/*.parquet`, `Data/processed/training_manifest.json` — Phase 4 outputs; primary inputs to Phase 5.
-- `Data/processed/features_flat_2024.parquet`, `Data/processed/feature_vocab.json` — Phase 2 outputs; secondary inputs to Phase 5 (labels + breakdown dimension lookup).
-- `Data/processed/splits_2024.json` — Phase 3 output; secondary input to Phase 5 (slice membership cross-validation).
+- `Data/processed/features_flat_all.parquet`, `Data/processed/feature_vocab.json` — Phase 2 outputs; secondary inputs to Phase 5 (labels + breakdown dimension lookup).
+- `Data/processed/splits_all.json` — Phase 3 output; secondary input to Phase 5 (slice membership cross-validation).
 - `Data/processed/feature_manifest.json`, `Data/processed/splits_manifest.json`, `Data/processed/training_manifest.json` — Upstream manifests; consulted for source-hash pinning per EV-IN-06, EV-IN-07, EV-IN-08.
 - [CLAUDE.md](../CLAUDE.md) — Repository-level notes on venv, dataset shape, and the Phase 1–4 build conventions Phase 5 mirrors.
