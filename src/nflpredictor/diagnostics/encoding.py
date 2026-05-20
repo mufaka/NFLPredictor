@@ -17,8 +17,8 @@ import pandas as pd
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_PROCESSED_DIR = REPO_ROOT / "Data" / "processed"
 
-FEATURES_FLAT_BASENAME = "features_flat_2024.parquet"
-FEATURES_POS_BASENAME = "features_pos_2024.parquet"
+FEATURES_FLAT_BASENAME = "features_flat_all.parquet"
+FEATURES_POS_BASENAME = "features_pos_all.parquet"
 FEATURE_VOCAB_BASENAME = "feature_vocab.json"
 
 # Phase 4 encoder constants (TR-CAT-07). The encoder reserves index 0 for the
@@ -31,7 +31,7 @@ def encode_one_game_flat(
     game_id: str,
     processed_dir: pathlib.Path = DEFAULT_PROCESSED_DIR,
 ) -> pd.Series:
-    """Return the row of ``features_flat_2024.parquet`` for ``game_id``."""
+    """Return the row of ``features_flat_all.parquet`` for ``game_id``."""
     return _read_one_game(processed_dir / FEATURES_FLAT_BASENAME, game_id)
 
 
@@ -39,7 +39,7 @@ def encode_one_game_pos(
     game_id: str,
     processed_dir: pathlib.Path = DEFAULT_PROCESSED_DIR,
 ) -> pd.Series:
-    """Return the row of ``features_pos_2024.parquet`` for ``game_id``."""
+    """Return the row of ``features_pos_all.parquet`` for ``game_id``."""
     return _read_one_game(processed_dir / FEATURES_POS_BASENAME, game_id)
 
 

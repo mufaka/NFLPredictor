@@ -129,10 +129,17 @@ def test_only_learned_rungs_contribute_rows(
 # --------------------------------------------------------------------------
 
 
-def _splits_k_for_fold_index(splits_path: pathlib.Path) -> dict[int, int]:
-    """Map S3 fold_index (0..8) → k value (6..14) for the v1 splits config."""
+def _loso_fold_keys(splits_path: pathlib.Path) -> dict[int, int]:
+    """Map loso_cv fold_index → val_season (the loss-curve ``fold`` value).
+
+    Returns ``{}`` when the splits artifact carries no loso_cv strategy — the
+    default config trains season_holdout only, where every curve has fold 0.
+    """
     splits = json.loads(splits_path.read_text())
-    return {int(f["fold_index"]): int(f["k"]) for f in splits["S3"]["folds"]}
+    loso = splits.get("loso_cv")
+    if not loso:
+        return {}
+    return {int(f["fold_index"]): int(f["val_season"]) for f in loso["folds"]}
 
 
 def test_best_epoch_val_mae_matches_training_summaries(
@@ -154,7 +161,7 @@ def test_best_epoch_val_mae_matches_training_summaries(
     )
     df = pq.read_table(fixture_outputs / TRAINING_LOSS_CURVES_BASENAME).to_pandas()
     summaries = manifest["training_summaries"]
-    fold_index_to_k = _splits_k_for_fold_index(fixture_outputs / PHASE3_SPLITS_BASENAME)
+    fold_index_to_k = _loso_fold_keys(fixture_outputs / PHASE3_SPLITS_BASENAME)
 
     checked = 0
     for combo_id, summary in summaries.items():
@@ -218,7 +225,7 @@ def test_epoch_coverage_matches_epochs_trained(
         (fixture_outputs / TRAINING_MANIFEST_BASENAME).read_text()
     )
     df = pq.read_table(fixture_outputs / TRAINING_LOSS_CURVES_BASENAME).to_pandas()
-    fold_index_to_k = _splits_k_for_fold_index(fixture_outputs / PHASE3_SPLITS_BASENAME)
+    fold_index_to_k = _loso_fold_keys(fixture_outputs / PHASE3_SPLITS_BASENAME)
 
     for combo_id, summary in manifest["training_summaries"].items():
         sub = df[df["combination_id"] == combo_id]

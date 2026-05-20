@@ -6,144 +6,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 1 (Data Build) is implemented. Run the build with:
+The pipeline has been migrated from a single 2024 season to **six seasons, 2020–2025**. `Docs/Plan-MultiYear-Migration.md` is the cross-phase roadmap and records the locked decisions (full multi-year, synthetic `madden_id`, combined output files, season-holdout splits). Phases 1–5 are implemented for multi-year; Phase 6's diagnostics module is migrated, but its prose docs and the two notebooks still need a refresh (see Phase 6 below).
+
+Run each phase from the activated venv:
 
 ```bash
-source .venv/bin/activate
-python -m nflpredictor.databuild
+python -m nflpredictor.databuild   # Phase 1
+python -m nflpredictor.features    # Phase 2
+python -m nflpredictor.splits      # Phase 3
+python -m nflpredictor.train       # Phase 4
+python -m nflpredictor.evaluate    # Phase 5
 ```
 
-This reads `Data/raw/{box_scores_2024.csv, maddennfl24fullplayerratings.csv, player_overrides.csv}` and emits four files into `Data/processed/`:
+Each phase SHA-verifies the upstream phase's tracked outputs against its manifest before running, so drift fails fast. Re-running any phase on identical inputs produces byte-identical outputs (modulo manifest timestamps). Run the test suite with `pytest -q`.
 
-- `madden_2024.csv` — Madden roster with `madden_id` (first column) + `matched` (last column); appended unmatched-starter rows have `matched=0` and null-filled ratings.
-- `box_scores_2024.csv` — same shape as raw, but every per-slot `_ID` column now carries a `madden_id` (no blanks).
-- `player_id_mapping.csv` — one row per unique `(box_score_id, madden_id)` pair with the tier note that resolved it.
-- `build_manifest.json` — SHA-256 hashes of inputs and outputs, normalization version, git commit, and per-tier match counts.
+**Phase 1 (Data Build)** reads the 13 raw files (`box_scores_{2020..2025}.csv`, `madden_{2020..2025}.csv`, `player_overrides.csv`) and emits combined files into `Data/processed/`:
+- `madden_all.csv` — six seasons of Madden rows; `madden_id` (first column, `YYYY-NNNNN`, per-season) + 55 source columns incl. `season` + `matched` (last). The raw files' own `madden_id` column is dropped on read. Unmatched-starter rows have `matched=0` and per-season null-filled ratings.
+- `box_scores_all.csv` — all 1,622 games, a prepended `season` column, every per-slot `_ID` rewritten to a `madden_id`.
+- `player_id_mapping.csv` — one row per `(season, box_score_id, madden_id)` with the resolving tier note.
+- `build_manifest.json` — SHA-256 of the 13 inputs + 3 outputs; `normalization_version`; `total` + `by_season` match counts.
 
-Re-running the build on identical inputs produces byte-identical CSVs (`tests/test_determinism.py` enforces this). Run the test suite with `pytest -q` from the activated venv.
+Matching is season-scoped (a 2020 starter only matches 2020 Madden rows). `teams.py` maps PFR codes to modern abbreviations (`kan`→`KC`). A guard (DB-IN-07) rejects a `box_scores_<YYYY>.csv` containing a game from another season.
 
-Phase 2 (Feature Engineering) is implemented. Run the feature build with:
+**Phase 2 (Feature Engineering)** emits `features_flat_all.parquet` (1,622 × 203) and `features_pos_all.parquet` (1,622 × 259), each beginning with `GameId` then a `season` identifier column (a split key, never a model feature), plus `feature_vocab.json` (`vocab_version: "v3"`) and `feature_manifest.json`. The shipped `feature_config.yaml` uses the new lowercase Madden schema (`overallrating`, `archetype`). Week numbers are derived per season from a six-season Week-1-anchor calendar; days-of-rest is per season.
 
-```bash
-source .venv/bin/activate
-python -m nflpredictor.features
-```
+**Phase 3 (Splits)** emits `splits_all.json` + `splits_manifest.json`. The week-based strategies are gone; splitting is **season-holdout**. The default `splits_config.yaml` partitions by season: `season_holdout` = train 2020–2023 (1,077 games) / val 2024 (272) / test 2025 (273). `loso_cv` (leave-one-season-out CV) is available but opt-in. `splits_version: "v2"`.
 
-The build refuses to run unless Phase 1's outputs on disk match the SHAs recorded in `Data/processed/build_manifest.json` (FE-IN-04). It reads Phase 1's processed outputs plus `Data/raw/feature_config.yaml` and emits four files into `Data/processed/`:
+**Phase 4 (Baseline & Model Ladder)** emits per-`(rung, shape, strategy)` prediction parquets named `<rung>__<shape>__<season_holdout|loso_cv>.parquet` + `training_manifest.json` + `training_loss_curves.parquet`. The default config (`strategies: [season_holdout]`) produces 6 prediction parquets — 2 trivial rungs (mean, team_mean) + 4 learned (linear/mlp × flat/pos). `training_version: "v4"`. Device-aware, single-device, per-device byte determinism. The encoder excludes the `season` identifier column from the model input.
 
-- `features_flat_2024.parquet` — slot-indexed feature matrix (272 rows × 202 columns for the v1 default config). One column per `(slot, Madden column)` pair, plus per-slot `_position` codes and `_matched` flags, plus game-level / weather / officials columns and the two regression labels.
-- `features_pos_2024.parquet` — position-indexed feature matrix (272 rows × 258 columns). Same shape contract as B-flat but grouped by canonical position taxonomy (29 home slots + 29 away slots per row).
-- `feature_vocab.json` — sorted integer-code domain for every categorical column, plus the data-driven `column_vocab_keys` routing map Phase 4 reads. Schema tag `vocab_version: "v2"` with three top-level fields: `vocab_version`, `entries` (the `{vocab_key: [values...]}` integer-code domain), and `column_vocab_keys` (`{column_name: vocab_key}` map covering every categorical column across both shapes). Shared `entries` keys: `team_codes`, `coaches`, `officials`, `positions`, plus one key per Madden categorical column (default: `Archetype`) and per game-level categorical (`day_of_week`, `stadium`, `roof`, `surface`).
-- `feature_manifest.json` — SHA-256 hashes of inputs, outputs, and the config; `normalization_version`; per-shape column counts; vocab sizes; git commits.
+**Phase 5 (Evaluation)** emits `evaluation/metrics_headline.json` + 5 breakdown parquets + plot PNGs + `evaluation_manifest.json`. Strategies are `season_holdout` (val/test slices) and `loso_cv` (per-fold slices). On the real data the held-out **2025 test MAE** is best for the trivial `mean` baseline (~7.9) — the learned rungs do not yet beat it, which the season-holdout split exposes honestly.
 
-Re-running the build on identical inputs produces byte-identical parquet, vocab, and manifest (modulo the timestamp). `tests/test_features_integration.py` and `tests/test_features_pipeline_run.py` enforce this. Run the test suite with `pytest -q` from the activated venv.
+**Phase 6 (Documentation & Diagnostics)** — the diagnostics module `src/nflpredictor/diagnostics/` (`trace.py`, `encoding.py`, `loss_curves.py`) is migrated to the multi-year contract: season-aware `load_raw_game`, `season_holdout`/`loso_cv` split-membership and prediction lookups, `*_all` basenames. `tests/test_diagnostics.py` and `tests/test_loss_curves.py` pass. **Still pending**: the Phase 6 prose docs (`Docs/Phase6-*.md`) and the two `notebooks/phase6_*.ipynb` notebooks were authored against the single-season world and need re-execution / rewording for multi-year.
 
-The shipped `feature_config.yaml` is the knob for expanding the feature inventory — adding Madden columns or toggling weather/officials is a YAML edit, not a code change.
-
-Phase 3 (Splits) is implemented. Run the split build with:
-
-```bash
-source .venv/bin/activate
-python -m nflpredictor.splits
-```
-
-The build refuses to run unless Phase 2's `features_flat_2024.parquet` on disk matches the SHA recorded in `Data/processed/feature_manifest.json` (SP-IN-04). It reads that parquet's `(GameId, week)` columns plus `Data/raw/splits_config.yaml` and emits two files into `Data/processed/`:
-
-- `splits_2024.json` — split-assignment artifact. For the v1 boundaries (train Weeks 1–12 / val 13–15 / test 16–18), S1 partitions the 272 games into train=179 / val=45 / test=48. S3 emits 9 expanding-window `(train, val)` folds (`k ∈ {6..14}`) plus a `test` slice identical to S1's.
-- `splits_manifest.json` — SHA-256 hashes of the Phase 2 source parquet, the splits config, and the artifact; `splits_version`; per-strategy summaries; git commits.
-
-Re-running the build on identical inputs produces byte-identical JSON (modulo the manifest timestamp). `tests/test_splits_integration.py`, `tests/test_splits_determinism.py`, and `tests/test_splits_pipeline_run.py` enforce this. Run the test suite with `pytest -q` from the activated venv.
-
-The shipped `splits_config.yaml` is the knob for the split contract — moving week boundaries or toggling between S1/S3 is a YAML edit; a new strategy or change to artifact layout requires a `splits_version` bump.
-
-Phase 4 (Baseline & Model Ladder) is implemented. Run the training build with:
-
-```bash
-source .venv/bin/activate
-python -m nflpredictor.train
-```
-
-The build refuses to run unless every Phase 2 tracked output (`features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`) and Phase 3's `splits_2024.json` on disk match the SHAs recorded in their upstream manifests (TR-IN-05 / TR-IN-06). It reads those outputs plus `Data/raw/training_config.yaml` and emits **12 prediction parquets + a training manifest** into `Data/processed/`:
-
-- `predictions/<rung_id>__<shape>__<strategy>.parquet` × 12 — long-format predictions per `(rung, feature_shape, strategy)` combination. The v1 ladder is rungs 0–3 (mean → team_mean → `nn.Linear` → small MLP); each learned rung trains once per feature shape (`flat`, `pos`); each combination is run for both `S1` (single fold, emits val + test predictions) and `S3` (9 expanding-window folds, emits per-fold val predictions). 12 files total = 2 trivial × 1 shape × 2 strategies + 2 learned × 2 shapes × 2 strategies.
-- `training_manifest.json` — SHA-256 hashes of every Phase 2 / Phase 3 input, the training config, and each output parquet; per-combination val MAE summary (S1: single value; S3: per-fold + mean); resolved `device`, `torch_version`, and (when CUDA) `cuda_device_name` + `cuda_version`. The manifest carries val MAE only — test MAE is never computed by Phase 4 (TR-MAN-03); Phase 5 owns that.
-
-The training build is **device-aware, single-device**: `device: "auto"` (the v1 default) resolves to CUDA when available, else CPU; explicit `"cpu"` / `"cuda"` is honored. Determinism is per-device — re-running on the same machine with the same pinned PyTorch wheel produces byte-identical parquets and manifest (modulo `build_timestamp_utc`); CPU↔CUDA byte equality is not asserted. CPU runs of the full v1 config take ~30–60 minutes on a modern 8-core laptop; CUDA is the routine training path.
-
-The encoder applies a +1 index bump so Phase 2's `NULL_SENTINEL = -1` lands in a reserved null slot at embedding/one-hot index 0 (TR-CAT-07). Categorical column routing is **data-driven**: the encoder reads `feature_vocab.json → column_vocab_keys` and dispatches each column to the named vocab — no hard-coded suffix rules. Numeric columns are those absent from that map. Routing into one-hot vs. embedding uses the configurable `one_hot_threshold` (default 8): low-card vocab (size ≤ threshold: `roof`, `surface`, `day_of_week`) → one-hot; high-card (`Archetype`, `team_codes`, `coaches`, `officials`, `positions`, `stadium`) → learned `nn.Embedding`, shared per vocab key across all physical columns that point at the same vocab. `embedding_dims` accepts an optional `_default: <dim>` key that covers any high-card vocab not listed explicitly — adding a new Madden categorical (e.g. `Position`, `College`) is a pure `feature_config.yaml` edit and no longer requires touching `train/encoders.py`.
-
-`tests/test_train_integration.py` and `tests/test_train_determinism.py` enforce the per-device byte-identity contract against a synthetic 36-game fixture (regenerate with `python -m tests.fixtures.train._regenerate`). `tests/test_train_pipeline_run.py` runs against real Phase 2/3 outputs and skips when `Data/processed/predictions/` is empty (the heavy real-data run is expected from the CUDA machine, not from CPU CI).
-
-The shipped `training_config.yaml` is the knob for the ladder — adjusting `rungs`, `shapes`, `strategies`, hyperparameters, embedding dims, or the device is a YAML edit; adding a new rung or output layout change requires a `training_version` bump.
-
-Phase 5 (Evaluation) is implemented. Run the evaluation build with:
-
-```bash
-source .venv/bin/activate
-python -m nflpredictor.evaluate
-```
-
-The build refuses to run unless every Phase 2 tracked output (`features_flat_2024.parquet`, `features_pos_2024.parquet`, `feature_vocab.json`), Phase 3's `splits_2024.json`, and every Phase 4 prediction parquet listed in `training_manifest.json → output_sha256` on disk match their upstream-manifest SHAs (EV-IN-06 / EV-IN-07 / EV-IN-08). It reads those outputs plus `Data/raw/evaluation_config.yaml` and emits **a headline JSON + 5 breakdown parquets + ~40 PNGs + an evaluation manifest** into `Data/processed/evaluation/`:
-
-- `metrics_headline.json` — full metric matrix per `(combination, slice)` cell; five metrics always computed (MAE / per-side RMSE / W-L accuracy / spread MAE / total MAE) regardless of `headline_metric`.
-- `breakdowns/<dim>.parquet` × 5 (toggleable) — `by_team` / `by_week` / `by_home_away` / `by_surface` / `by_roof`; each parquet is universe-complete (empty cells appear with `n_games == 0` and null metrics per EV-MET-09).
-- `plots/<combination_id>__<slice>__{scatter,residuals,by_week}.png` plus `plots/ladder_summary__{val,test,pooled}.png` — Agg-backend matplotlib renders with the `Software` + `Creation Time` PNG metadata stripped for byte-determinism.
-- `evaluation_manifest.json` — SHA-256 of every Phase 2 / Phase 3 / Phase 4 input, the config, and every output file; `matplotlib_version` + `numpy_version` + `pyarrow_version`; per-combination headline summary; git commits.
-
-The determinism contract is **split**: `metrics_headline.json`, every breakdown parquet, and the manifest (modulo `build_timestamp_utc`) are byte-deterministic given pinned inputs (EV-NF-01) — re-running on the same machine with the same pinned matplotlib wheel produces byte-identical metric outputs. PNG byte-identity holds only within the same pinned matplotlib wheel on the same platform (EV-NF-02); cross-version PNG byte-identity is not asserted and the manifest's `matplotlib_version` is the auditability lever.
-
-The headline-MAE formula (EV-MET-01) is identical to Phase 4's `TR-MAN-04`: `mean(|pred_home - true_home| + |pred_away - true_away|) / 2`. Cross-phase agreement is enforced by `tests/test_evaluate_cross_phase.py` (EV-TEST-08): Phase 5's val MAE for every S1 combination and per-fold MAE for every S3 combination match Phase 4's `training_summaries` values to ~1e-6 relative tolerance.
-
-`tests/test_evaluate_integration.py` and `tests/test_evaluate_determinism.py` enforce the byte-equality contracts against a synthetic 36-game fixture (regenerate with `python -m tests.fixtures.evaluate._regenerate`); the eval fixture reuses Phase 4's train fixture wholesale. `tests/test_evaluate_pipeline_run.py` runs against real Phase 2 + Phase 3 + Phase 4 outputs and skips when `Data/processed/predictions/` is empty (the real-data run is expected post-Phase 4 on the CUDA machine, not from CPU CI).
-
-The shipped `evaluation_config.yaml` is the knob for evaluation — toggling a breakdown, swapping the highlighted headline metric, adding/removing per-breakdown plots, or changing plot DPI/figsize is a YAML edit; adding a new metric or breakdown dimension or changing output layout requires an `evaluation_version` bump.
-
-Phase 6 (Documentation & Diagnostics) is implemented. It is the project's first non-code-emitting phase — its deliverables are prose docs, two executed Jupyter notebooks, a diagnostics helper module, and one backward edit to Phase 4 (per-epoch loss-curve emission). No new build entry point; the deliverables are read directly.
-
-The four artifacts live in `Docs/` and `notebooks/`:
-
-- `Docs/Phase6-ReadingTheOutputs.md` — a field guide to every Phase 5 artifact. 10 structured entries (metrics JSON, five breakdown parquets, four plot families) each with four sub-sections: *What it shows*, *What good looks like*, *Red flags*, *Action to consider*. Plus "How to read across combinations" framing delta comparisons as the primary lens, plus a Vocabulary appendix.
-- `Docs/Phase6-Walkthrough.md` and `notebooks/phase6_walkthrough.ipynb` — a one-game pipeline trace (`202411280dal`, Dallas Cowboys Thanksgiving 2024, Week 13). Six sections walking the game from raw box-score row → Madden join → Phase 2 features → Phase 3 split assignment → Phase 4 predictions → Phase 5 breakdowns. The `.md` is the `jupyter nbconvert --to markdown` export of the notebook — **do not hand-edit**; re-run the notebook and re-export.
-- `Docs/Phase6-TrainingDynamics.md` and `notebooks/phase6_training_dynamics.ipynb` — a reader's guide to training: how the loop works, why MAE, Adam + fixed LR, early stopping mechanics, four canonical train↔val gap patterns, and a "first knob to reach for" table. The notebook loads `Data/processed/training_loss_curves.parquet` via `nflpredictor.diagnostics.loss_curves.load_loss_curves()` (SHA-verified against `training_manifest.json`) and renders one annotated subplot per learned combination.
-
-The backward edit to Phase 4 added `Data/processed/training_loss_curves.parquet` — a sidecar parquet with one row per `(combination_id, fold, epoch)` carrying `train_loss`, `val_loss`, `val_mae`. The new SHA lives in `training_manifest.json → output_sha256`; `training_version` bumped to `v2`. Per-device byte equality holds (same contract as the prediction parquets). The capture is read-only with respect to optimization — the prediction parquets are byte-identical to a no-capture baseline (DD-LC-08, enforced inside `tests/test_loss_curves.py`).
-
-The diagnostics helper module is `src/nflpredictor/diagnostics/` — three submodules called by the notebooks:
-
-- `trace.py` — per-game helpers: `load_raw_game(game_id)`, `resolve_starters(game_id)`, `lookup_split_membership(game_id)`, `lookup_predictions(game_id)`. Reads `Data/raw/box_scores_2024.csv`, `Data/processed/player_id_mapping.csv`, `Data/processed/splits_2024.json`, and every prediction parquet.
-- `encoding.py` — `encode_one_game_flat(game_id)`, `encode_one_game_pos(game_id)`, `explain_categorical(column, raw_value)` — walks one categorical column's raw → vocab key → integer code → routing chain. The integer code includes Phase 4's `NULL_BUMP = 1` so it matches what the encoder consumes (TR-CAT-07).
-- `loss_curves.py` — `load_loss_curves()`, `filter_curves()`. The loader verifies the parquet's SHA against `training_manifest.json → output_sha256["training_loss_curves.parquet"]` and raises `LossCurvesIntegrityError` on mismatch; pass `verify_sha=False` to skip (useful for hand-crafted fixtures).
-
-The notebooks are committed in their **executed state** — cell outputs are part of the source per DD-WT-03. Re-execution is the source of any update. The regen commands (single-line invocations to be added to a `Makefile` in a future tidy-up):
-
-```bash
-source .venv/bin/activate
-jupyter nbconvert --to notebook --execute --inplace notebooks/phase6_walkthrough.ipynb
-jupyter nbconvert --to markdown notebooks/phase6_walkthrough.ipynb --output ../Docs/Phase6-Walkthrough.md
-jupyter nbconvert --to notebook --execute --inplace notebooks/phase6_training_dynamics.ipynb
-```
-
-The walkthrough notebook is currently authored against the train+evaluate fixture under `tests/fixtures/evaluate/` so cells render real outputs on the CPU-only dev box. After the CUDA machine runs the real Phase 4 + Phase 5 pipeline (populating `Data/processed/predictions/` and `Data/processed/evaluation/`), re-point `PROCESSED_DIR` at `Data/processed/` and re-execute to refresh cell outputs with real numbers. Same posture applies to the training-dynamics notebook's `USE_FIXTURE = True` toggle.
-
-The new optional-dependency group is `[project.optional-dependencies] docs` in `pyproject.toml` — `jupyter` and `nbconvert`. Install with `pip install -e .[docs]`; the default `dev` group does not pull these.
-
-`tests/test_phase6_docs.py` carries six completeness checks: the walkthrough markdown exists and has the six DD-WT-02 section headers; the reading-outputs guide has 10 DD-RG-02 artifact entries and the three DD-RG-01/05/06 cross-cutting sections; the training-dynamics doc has the six DD-TD-01 topic headers plus the DD-TD-03 "What is not covered" note; the training-dynamics notebook is present and above the 50 KB sanity floor. `tests/test_diagnostics.py` covers the three diagnostics submodules. `tests/test_loss_curves.py` covers the Phase 4 backward edit's schema, sort order, integrity, and read-only-capture contract.
-
-The package lives under `src/nflpredictor/`; the data-build module is `src/nflpredictor/databuild/`, the feature module is `src/nflpredictor/features/`, the splits module is `src/nflpredictor/splits/`, the training module is `src/nflpredictor/train/`, the evaluation module is `src/nflpredictor/evaluate/`, and the diagnostics module is `src/nflpredictor/diagnostics/`. The phase plans and specs are in `Docs/Plan-Phase1-DataBuild.md`, `Docs/Spec-Phase1-DataBuild.md`, `Docs/Plan-Phase2-FeatureEngineering.md`, `Docs/Spec-Phase2-FeatureEngineering.md`, `Docs/Plan-Phase3-Splits.md`, `Docs/Spec-Phase3-Splits.md`, `Docs/Plan-Phase4-BaselineLadder.md`, `Docs/Spec-Phase4-BaselineLadder.md`, `Docs/Plan-Phase5-Evaluation.md`, `Docs/Spec-Phase5-Evaluation.md`, `Docs/Plan-Phase6-Documentation.md`, and `Docs/Spec-Phase6-Documentation.md`. `Docs/ConfigReference.md` is the single reference for the four YAML files under `Data/raw/` — every key, allowed values, and the enumerable lists (Madden columns, game-level identifiers, etc.).
+The package lives under `src/nflpredictor/` (`databuild/`, `features/`, `splits/`, `train/`, `evaluate/`, `diagnostics/`). Phase specs/plans are `Docs/{Spec,Plan}-Phase{1..6}-*.md`; Spec-Phase1–5 carry multi-year revision notes. `Docs/ConfigReference.md` documents the four `Data/raw/` YAML files (it predates the migration — verify against the shipped configs).
 
 ## Datasets
 
-Both CSVs live in `Data/raw/` and are the input for whatever modeling work follows.
+`Data/raw/` holds 13 raw inputs: six `box_scores_<YYYY>.csv` (2020–2025), six `madden_<YYYY>.csv`, and `player_overrides.csv`. The old `maddennfl24fullplayerratings.csv` is the superseded single-season Madden source — no longer used by the build.
 
-### `box_scores_2024.csv` (272 games, 164 columns)
-One row per NFL 2024 regular-season game. Key column families:
-- **Game metadata**: `GameId` (e.g. `202409050kan` — date + home team code), `GameDate`, `DayOfWeek`, `StartTime`, `HomeTeam`/`AwayTeam` (full names) and `HomeTeamCode`/`AwayTeamCode` (3-letter codes like `kan`, `rav`), `HomeScore`/`AwayScore`, `HomeCoach`/`AwayCoach`.
+### `box_scores_<YYYY>.csv` (≈270 games each, 164 columns)
+One row per NFL regular-season game. All six share one schema (only `box_scores_2024.csv` uses CRLF line endings; the build tolerates both).
+- **Game metadata**: `GameId` (e.g. `202409050kan` — date + home team code), `GameDate`, `DayOfWeek`, `StartTime`, `HomeTeam`/`AwayTeam`, `HomeTeamCode`/`AwayTeamCode` (PFR 3-letter codes like `kan`, `rav`), `HomeScore`/`AwayScore`, `HomeCoach`/`AwayCoach`.
 - **Venue/conditions**: `Stadium`, `Attendance`, `Duration`, `Roof`, `Surface`, `Weather` (free-text — may be empty for domes).
-- **Starting lineups**: For each team and side of the ball, 11 slots numbered `01`–`11` with `_Position`, `_Name`, `_ID` columns. Naming pattern: `HomeOff01_Position`, `HomeOff01_Name`, `HomeOff01_ID`, …, `HomeDef11_*`, `AwayOff*_*`, `AwayDef*_*`. The `_ID` is a Pro-Football-Reference style player code (e.g. `MahoPa00`) — occasionally empty.
+- **Starting lineups**: 11 slots per team/side with `_Position`, `_Name`, `_ID` columns (`HomeOff01_*` … `AwayDef11_*`). The `_ID` is a Pro-Football-Reference player code (e.g. `MahoPa00`) — occasionally empty.
 - **Officials**: `Official01_Role`/`_Name` through `Official07_*`.
 
-### `maddennfl24fullplayerratings.csv` (2,368 players, 69 columns)
-One row per player from Madden NFL 24. `Team` uses team nicknames (e.g. `49ers`, not the PFR code) — joining to box scores requires a team-name mapping. `Full Name` is the join handle to the box-score lineup names; there is no shared player ID, so name normalization (Jr./Sr., punctuation, accents) will matter. Ratings are 0–99 across general attributes (Speed, Awareness, …) and position-specific skills (Throw Accuracy Short/Mid/Deep, Man/Zone Coverage, etc.). Several columns have leading/trailing spaces in the header (e.g. ` Total Salary `, ` Signing Bonus `) — keep that in mind when reading the CSV.
+### `madden_<YYYY>.csv` (≈2,300 players each, 56 columns)
+One row per player. Lowercase headers, no whitespace. `team` uses modern abbreviations (`KC`, `BAL`). `fullname` is the join handle to box-score names — no shared player ID, so name normalization matters. Carries a `season` column and a source `madden_id` (a non-unique `NAME_POSGROUP` string the build drops). Ratings 0–99. Some columns are entirely empty in some seasons (`midrouterunning`, `birthdate` in 2021–2023, `yearspro` in 2025) — the build leaves them unfilled (DB-FILL-06).
 
 ## Conventions for new work
 

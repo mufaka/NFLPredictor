@@ -18,11 +18,16 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_RAW_DIR = REPO_ROOT / "Data" / "raw"
 DEFAULT_PROCESSED_DIR = REPO_ROOT / "Data" / "processed"
 
-BOX_SCORES_BASENAME = "box_scores_2024.csv"
 PLAYER_ID_MAPPING_BASENAME = "player_id_mapping.csv"
-SPLITS_BASENAME = "splits_2024.json"
-FEATURES_FLAT_BASENAME = "features_flat_2024.parquet"
+SPLITS_BASENAME = "splits_all.json"
+FEATURES_FLAT_BASENAME = "features_flat_all.parquet"
 PREDICTIONS_DIRNAME = "predictions"
+
+
+def _season_of(game_id: str) -> int:
+    """NFL season of a GameId — month >= 8 maps to the calendar year, else year-1."""
+    year, month = int(game_id[:4]), int(game_id[4:6])
+    return year if month >= 8 else year - 1
 
 
 def _starter_slot_names() -> list[str]:
@@ -39,11 +44,13 @@ def load_raw_game(
     game_id: str,
     raw_dir: pathlib.Path = DEFAULT_RAW_DIR,
 ) -> pd.Series:
-    """Return the ``box_scores_2024.csv`` row for ``game_id``.
+    """Return the raw box-score row for ``game_id``.
 
-    Raises ``KeyError`` if no row matches.
+    The season is derived from the ``GameId`` date prefix and used to pick
+    the right ``box_scores_<YYYY>.csv`` file. Raises ``KeyError`` if no row
+    matches.
     """
-    path = raw_dir / BOX_SCORES_BASENAME
+    path = raw_dir / f"box_scores_{_season_of(game_id)}.csv"
     df = pd.read_csv(path)
     matched = df[df["GameId"] == game_id]
     if matched.empty:
@@ -62,16 +69,13 @@ def resolve_starters(
 ) -> pd.DataFrame:
     """One row per starter slot with Madden-ID provenance.
 
-    Columns: ``slot`` (e.g. ``"HomeOff01"``), ``side`` (``"Home"``/``"Away"``),
-    ``unit`` (``"Off"``/``"Def"``), ``position``, ``name``, ``box_score_id``,
-    ``madden_id``, ``note``. ``box_score_id`` is ``None`` when the raw cell
-    was blank; ``madden_id`` and ``note`` are ``None`` when no mapping row
-    exists for that ``box_score_id`` (rare, but possible for unmatched
-    starters appended during Phase 1).
+    Columns: ``slot``, ``side``, ``unit``, ``position``, ``name``,
+    ``box_score_id``, ``madden_id``, ``note``. ``madden_id`` and ``note`` are
+    ``None`` when no mapping row exists for that ``box_score_id``.
     """
     row = load_raw_game(game_id, raw_dir)
     mapping = pd.read_csv(processed_dir / PLAYER_ID_MAPPING_BASENAME)
-    by_box_id = mapping.set_index("box_score_id")
+    by_box_id = mapping.drop_duplicates("box_score_id").set_index("box_score_id")
 
     records: list[dict[str, Any]] = []
     for slot in _starter_slot_names():
@@ -100,30 +104,36 @@ def lookup_split_membership(
     game_id: str,
     processed_dir: pathlib.Path = DEFAULT_PROCESSED_DIR,
 ) -> dict[str, Any]:
-    """Return the S1 bucket and S3 fold(s) that contain ``game_id``.
+    """Return the split membership of ``game_id``.
 
-    Shape: ``{"S1": "train"|"val"|"test"|None, "S3_folds": [k, ...], "S3_test": bool}``.
-    ``S3_folds`` lists the ``k`` values (6–14) of every S3 fold whose ``val``
-    slice contains the game; an S3 train-only game returns an empty list.
+    Shape: ``{"season_holdout": "train"|"val"|"test"|None,
+    "loso_cv_val_seasons": [s, ...], "loso_cv_in_test": bool}``. The
+    ``loso_cv_*`` fields are empty/False when the splits artifact does not
+    carry the (opt-in) ``loso_cv`` strategy.
     """
     splits = json.loads((processed_dir / SPLITS_BASENAME).read_text())
 
-    s1_bucket: str | None = None
-    for name in ("train", "val", "test"):
-        if game_id in splits["S1"][name]:
-            s1_bucket = name
-            break
+    sh_bucket: str | None = None
+    season_holdout = splits.get("season_holdout")
+    if season_holdout:
+        for name in ("train", "val", "test"):
+            if game_id in season_holdout[name]:
+                sh_bucket = name
+                break
 
-    s3_folds_with_game: list[int] = []
-    for fold in splits["S3"]["folds"]:
-        if game_id in fold["val"]:
-            s3_folds_with_game.append(int(fold["k"]))
-    s3_in_test = game_id in splits["S3"]["test"]
+    loso_val_seasons: list[int] = []
+    loso_in_test = False
+    loso_cv = splits.get("loso_cv")
+    if loso_cv:
+        for fold in loso_cv["folds"]:
+            if game_id in fold["val"]:
+                loso_val_seasons.append(int(fold["val_season"]))
+        loso_in_test = game_id in loso_cv["test"]
 
     return {
-        "S1": s1_bucket,
-        "S3_folds": s3_folds_with_game,
-        "S3_test": s3_in_test,
+        "season_holdout": sh_bucket,
+        "loso_cv_val_seasons": loso_val_seasons,
+        "loso_cv_in_test": loso_in_test,
     }
 
 
@@ -133,15 +143,12 @@ def lookup_predictions(
 ) -> pd.DataFrame:
     """One row per ``(combination_id, slice)`` that emitted a prediction for ``game_id``.
 
-    Columns: ``combination_id``, ``slice`` (S1: ``"val"``/``"test"``;
-    S3: ``"fold_<k>"`` using each fold's ``k`` value from ``splits_2024.json``),
-    ``pred_home``, ``pred_away`` (at face value from the prediction parquet),
-    ``true_home``, ``true_away`` (from the Phase 2 features row),
-    ``residual_home`` = ``pred_home − true_home``, ``residual_away`` analogous.
+    Columns: ``combination_id``, ``slice`` (season_holdout: ``"val"``/``"test"``;
+    loso_cv: ``"fold_<val_season>"``), ``pred_home``, ``pred_away``,
+    ``true_home``, ``true_away``, ``residual_home``, ``residual_away``.
 
-    Returns an empty frame (with the correct columns) if no predictions
-    directory is present — the dev machine without a Phase 4 run is the
-    canonical empty case.
+    Returns an empty frame (with the correct columns) when no predictions
+    directory is present.
     """
     features = pd.read_parquet(
         processed_dir / FEATURES_FLAT_BASENAME,
@@ -156,24 +163,29 @@ def lookup_predictions(
     true_away = float(label_row["away_score"].iloc[0])
 
     splits = json.loads((processed_dir / SPLITS_BASENAME).read_text())
-    fold_k_by_index = {int(f["fold_index"]): int(f["k"]) for f in splits["S3"]["folds"]}
+    fold_season_by_index: dict[int, int] = {}
+    loso_cv = splits.get("loso_cv")
+    if loso_cv:
+        fold_season_by_index = {
+            int(f["fold_index"]): int(f["val_season"]) for f in loso_cv["folds"]
+        }
 
     pred_dir = processed_dir / PREDICTIONS_DIRNAME
     records: list[dict[str, Any]] = []
     if pred_dir.exists():
         for path in sorted(pred_dir.glob("*.parquet")):
             combination_id = path.stem
-            is_s1 = combination_id.endswith("__s1")
+            is_holdout = combination_id.endswith("__season_holdout")
             df = pd.read_parquet(path)
             hits = df[df["GameId"] == game_id]
             if hits.empty:
                 continue
             for _, hit in hits.iterrows():
-                if is_s1:
+                if is_holdout:
                     slice_label = str(hit["slice"])
                 else:
                     fold_idx = int(hit["fold_index"])
-                    slice_label = f"fold_{fold_k_by_index[fold_idx]}"
+                    slice_label = f"fold_{fold_season_by_index.get(fold_idx, fold_idx)}"
                 ph = float(hit["pred_home"])
                 pa = float(hit["pred_away"])
                 records.append({
