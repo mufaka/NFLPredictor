@@ -40,31 +40,35 @@ def parse_start_hour(start_time: str) -> int:
 def compute_days_rest(box_scores_df: pd.DataFrame) -> pd.DataFrame:
     """Days of rest for the home and away teams (FE-GAME-08).
 
-    Walks each team's games in chronological order. For a team's first game of
-    the season the corresponding ``days_rest_*`` cell is NaN (parquet-native
-    null) per the resolved spec — no arbitrary sentinel.
+    Walks each team's games in chronological order, **within each season
+    independently**. For a team's first game of a season the corresponding
+    ``days_rest_*`` cell is NaN (parquet-native null) — no arbitrary
+    sentinel, and rest never spans a season boundary.
 
     Returns a DataFrame with columns ``GameId``, ``days_rest_home``,
     ``days_rest_away`` (both ``float64``) in the same row order as
     ``box_scores_df``.
     """
     dates = box_scores_df["GameDate"].map(_to_date)
+    seasons = box_scores_df["season"].astype(str)
     home = box_scores_df["HomeTeamCode"].astype(str)
     away = box_scores_df["AwayTeamCode"].astype(str)
     game_ids = box_scores_df["GameId"].astype(str)
 
-    indexed = list(enumerate(zip(game_ids, dates, home, away)))
+    indexed = list(enumerate(zip(game_ids, dates, home, away, seasons)))
     # Sort by (date, original_index) so games on the same day stay stable.
     indexed.sort(key=lambda t: (t[1][1], t[0]))
 
-    last_seen: dict[str, date] = {}
+    # last_seen is keyed by (season, team) so rest is per-season (FE-GAME-08).
+    last_seen: dict[tuple[str, str], date] = {}
     home_rest: dict[int, float] = {}
     away_rest: dict[int, float] = {}
-    for idx, (_gid, d, h, a) in indexed:
-        home_rest[idx] = (d - last_seen[h]).days if h in last_seen else math.nan
-        away_rest[idx] = (d - last_seen[a]).days if a in last_seen else math.nan
-        last_seen[h] = d
-        last_seen[a] = d
+    for idx, (_gid, d, h, a, s) in indexed:
+        hk, ak = (s, h), (s, a)
+        home_rest[idx] = (d - last_seen[hk]).days if hk in last_seen else math.nan
+        away_rest[idx] = (d - last_seen[ak]).days if ak in last_seen else math.nan
+        last_seen[hk] = d
+        last_seen[ak] = d
 
     return pd.DataFrame({
         "GameId": game_ids.values,
@@ -102,9 +106,15 @@ def assemble_game_level(
 
     for field in include:
         if field == "week":
-            out["week"] = box_scores_df["GameDate"].map(
-                lambda v: week_for_date(_to_date(v))
-            ).astype("int64").values
+            out["week"] = pd.Series(
+                [
+                    week_for_date(_to_date(d), int(s))
+                    for d, s in zip(
+                        box_scores_df["GameDate"], box_scores_df["season"]
+                    )
+                ],
+                dtype="int64",
+            ).values
         elif field == "start_hour":
             out["start_hour"] = box_scores_df["StartTime"].map(
                 parse_start_hour

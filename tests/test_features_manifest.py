@@ -26,6 +26,7 @@ REQUIRED_KEYS = {
     "phase1_manifest_git_commit",
     "column_counts",
     "vocab_sizes",
+    "row_count",
 }
 
 
@@ -61,16 +62,18 @@ def test_manifest_has_all_required_keys(tmp_path):
             "Data/processed/features_flat_2024.parquet": flat,
             "Data/processed/feature_vocab.json": vocab_file,
         },
-        column_counts={"features_flat_2024.parquet": {"total": 100, "game_id": 1}},
+        column_counts={"features_flat_all.parquet": {"total": 100, "identifiers": 2}},
+        row_count=1622,
         vocab=vocab,
         repo_dir=tmp_path,
     )
 
     assert set(manifest.keys()) == REQUIRED_KEYS
     assert manifest["normalization_version"] == "v1"
+    assert manifest["row_count"] == 1622
     assert manifest["phase1_manifest_git_commit"] == "deadbeef"
     assert manifest["vocab_sizes"] == {"colors": 2}
-    assert manifest["column_counts"]["features_flat_2024.parquet"]["total"] == 100
+    assert manifest["column_counts"]["features_flat_all.parquet"]["total"] == 100
 
     # SHAs computed for every input/output.
     assert set(manifest["phase1_source_sha256"].keys()) == {
@@ -103,6 +106,7 @@ def test_manifest_phase1_git_commit_passes_through_none(tmp_path):
         phase1_manifest={"git_commit": None},
         feature_outputs={},
         column_counts={},
+        row_count=0,
         vocab=build_vocabulary({}),
         repo_dir=tmp_path,
     )

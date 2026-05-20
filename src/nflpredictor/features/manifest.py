@@ -31,6 +31,7 @@ def build_feature_manifest(
     phase1_manifest: dict,
     feature_outputs: dict[str, pathlib.Path],
     column_counts: dict[str, dict[str, int]],
+    row_count: int,
     vocab: Vocabulary,
     repo_dir: pathlib.Path,
     now: Optional[_dt.datetime] = None,
@@ -39,6 +40,7 @@ def build_feature_manifest(
     return {
         "build_timestamp_utc": utc_timestamp(now),
         "normalization_version": normalization_version,
+        "row_count": row_count,
         "feature_config_sha256": compute_sha256(config_path),
         "phase1_source_sha256": {
             name: compute_sha256(path)

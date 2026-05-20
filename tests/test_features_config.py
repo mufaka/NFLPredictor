@@ -19,7 +19,7 @@ from nflpredictor.features.config import (
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SHIPPED_CONFIG = REPO_ROOT / "Data" / "raw" / "feature_config.yaml"
-PROCESSED_MADDEN = REPO_ROOT / "Data" / "processed" / "madden_2024.csv"
+PROCESSED_MADDEN = REPO_ROOT / "Data" / "processed" / "madden_all.csv"
 
 
 def _write(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
@@ -28,12 +28,12 @@ def _write(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
     return path
 
 
-def test_shipped_v1_config_loads():
+def test_shipped_config_loads():
     cfg = load_feature_config(SHIPPED_CONFIG)
     assert isinstance(cfg, FeatureConfig)
-    assert cfg.normalization_version == "v1"
-    assert cfg.madden_columns == ("Overall Rating", "Archetype")
-    assert cfg.madden_categorical_columns == ("Archetype",)
+    assert cfg.normalization_version == "v2"
+    assert cfg.madden_columns == ("overallrating", "archetype")
+    assert cfg.madden_categorical_columns == ("archetype",)
     assert cfg.game_features == GameFeaturesConfig(
         weather="parsed",
         officials="included",
@@ -203,5 +203,5 @@ def test_validate_madden_columns_exist_passes_on_real_header():
 
 def test_validate_madden_columns_exist_rejects_missing_column():
     cfg = load_feature_config(SHIPPED_CONFIG)
-    with pytest.raises(FeatureConfigError, match="not in madden_2024.csv header"):
+    with pytest.raises(FeatureConfigError, match="not in madden_all.csv header"):
         validate_madden_columns_exist(cfg, ["Some Other Column"])

@@ -286,7 +286,7 @@ The position-bucket map collapses the inconsistent box-score position labels int
 
 Per-side capacity sum is 29 (offense 15, defense 14). The B-pos parquet therefore has 58 player slots per row (29 home + 29 away). Slots beyond the actually-fielded starter set are marked `{slot}_present = 0`.
 
-The position-bucket map must cover every box-score position label observed across all six seasons (FE-TEST-03). If a game's actual lineup contains more players in a bucket than its capacity, the overflow players are dropped and a stderr warning is emitted; if overflow becomes routine, the capacity is widened in a Phase 2 amendment with a `normalization_version` bump.
+The position-bucket map must cover every box-score position label observed across all six seasons (FE-TEST-03). Dual labels (`C/G`, `FB/RB`, `WR/RS`, …) — common in the 2020–2023 box scores — are resolved on their first `/`-delimited token, the player's primary position, so the bucket map only enumerates single labels. If a game's actual lineup contains more players in a bucket than its capacity, the overflow players are dropped and a stderr warning is emitted; if overflow becomes routine, the capacity is widened in a Phase 2 amendment with a `normalization_version` bump.
 
 ### 4.4 Output Files
 

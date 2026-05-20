@@ -26,14 +26,14 @@ from .slots import CANONICAL_SLOTS, build_madden_lookup
 from .vocab import Vocabulary, build_vocabulary, encode_column
 
 
-PHASE1_MADDEN_BASENAME = "madden_2024.csv"
-PHASE1_BOX_SCORES_BASENAME = "box_scores_2024.csv"
+PHASE1_MADDEN_BASENAME = "madden_all.csv"
+PHASE1_BOX_SCORES_BASENAME = "box_scores_all.csv"
 PHASE1_MANIFEST_BASENAME = "build_manifest.json"
 
 FEATURE_CONFIG_BASENAME = "feature_config.yaml"
 
-FLAT_PARQUET_BASENAME = "features_flat_2024.parquet"
-POS_PARQUET_BASENAME = "features_pos_2024.parquet"
+FLAT_PARQUET_BASENAME = "features_flat_all.parquet"
+POS_PARQUET_BASENAME = "features_pos_all.parquet"
 FEATURE_VOCAB_BASENAME = "feature_vocab.json"
 FEATURE_MANIFEST_BASENAME = "feature_manifest.json"
 
@@ -102,8 +102,9 @@ _GAME_LEVEL_VOCAB_KEY: dict[str, str] = {
 }
 
 
-# feature_vocab.json schema tag — bumped when the JSON layout changes.
-VOCAB_VERSION = "v2"
+# feature_vocab.json schema tag — bumped when the JSON layout or the
+# upstream contract changes. v3: multi-year (2020-2025) vocab.
+VOCAB_VERSION = "v3"
 
 
 def build_column_vocab_keys(
@@ -218,7 +219,7 @@ def encode_officials(officials_df: pd.DataFrame, vocab: Vocabulary) -> pd.DataFr
 def _flat_column_counts(config: FeatureConfig) -> dict[str, int]:
     n_madden_cols = len(config.madden_columns)
     return {
-        "game_id": 1,
+        "identifiers": 2,
         "game_level": len(config.game_features.include),
         "weather": 4 if config.game_features.weather == "parsed" else 0,
         "officials": 7 if config.game_features.officials == "included" else 0,
@@ -232,7 +233,7 @@ def _flat_column_counts(config: FeatureConfig) -> dict[str, int]:
 def _pos_column_counts(config: FeatureConfig) -> dict[str, int]:
     n_madden_cols = len(config.madden_columns)
     return {
-        "game_id": 1,
+        "identifiers": 2,
         "game_level": len(config.game_features.include),
         "weather": 4 if config.game_features.weather == "parsed" else 0,
         "officials": 7 if config.game_features.officials == "included" else 0,
@@ -345,18 +346,20 @@ def run_feature_build(
         combined_flat = _combine_sections(
             box_scores_df, game_level_encoded, weather_df, officials_encoded, flat_df
         )
-        # Pin GameId as first column for FE-OUT-03.
+        # Pin GameId then season as the leading identifier columns (FE-OUT-03).
         combined_flat = combined_flat.assign(
-            GameId=box_scores_df["GameId"].astype(str).values
+            GameId=box_scores_df["GameId"].astype(str).values,
+            season=box_scores_df["season"].astype("int32").values,
         )
         combined_flat = combined_flat[
-            ["GameId", *[c for c in combined_flat.columns if c != "GameId"]]
+            ["GameId", "season",
+             *[c for c in combined_flat.columns if c not in ("GameId", "season")]]
         ]
         write_parquet(combined_flat, flat_path)
         feature_outputs[f"Data/processed/{FLAT_PARQUET_BASENAME}"] = flat_path
         column_counts[FLAT_PARQUET_BASENAME] = _with_total(_flat_column_counts(config))
         print(
-            f"features_flat_2024.parquet: {len(combined_flat)} rows × "
+            f"{FLAT_PARQUET_BASENAME}: {len(combined_flat)} rows × "
             f"{len(combined_flat.columns)} columns",
             file=sys.stderr,
         )
@@ -369,16 +372,18 @@ def run_feature_build(
             box_scores_df, game_level_encoded, weather_df, officials_encoded, pos_df
         )
         combined_pos = combined_pos.assign(
-            GameId=box_scores_df["GameId"].astype(str).values
+            GameId=box_scores_df["GameId"].astype(str).values,
+            season=box_scores_df["season"].astype("int32").values,
         )
         combined_pos = combined_pos[
-            ["GameId", *[c for c in combined_pos.columns if c != "GameId"]]
+            ["GameId", "season",
+             *[c for c in combined_pos.columns if c not in ("GameId", "season")]]
         ]
         write_parquet(combined_pos, pos_path)
         feature_outputs[f"Data/processed/{POS_PARQUET_BASENAME}"] = pos_path
         column_counts[POS_PARQUET_BASENAME] = _with_total(_pos_column_counts(config))
         print(
-            f"features_pos_2024.parquet: {len(combined_pos)} rows × "
+            f"{POS_PARQUET_BASENAME}: {len(combined_pos)} rows × "
             f"{len(combined_pos.columns)} columns",
             file=sys.stderr,
         )
@@ -408,6 +413,7 @@ def run_feature_build(
         phase1_manifest=phase1_manifest,
         feature_outputs=feature_outputs,
         column_counts=column_counts,
+        row_count=len(box_scores_df),
         vocab=vocab,
         repo_dir=repo_dir,
     )

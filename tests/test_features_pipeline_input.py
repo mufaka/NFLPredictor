@@ -33,7 +33,7 @@ def _copy_real_phase1(target: pathlib.Path) -> None:
 def test_verify_succeeds_against_real_phase1_outputs(tmp_path):
     _copy_real_phase1(tmp_path)
     manifest = verify_phase1_outputs(tmp_path)
-    assert manifest["normalization_version"] == "v1"
+    assert manifest["normalization_version"] == "v2"
     assert f"Data/processed/{PHASE1_MADDEN_BASENAME}" in manifest["output_sha256"]
 
 

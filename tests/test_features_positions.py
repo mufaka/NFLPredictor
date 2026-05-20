@@ -16,11 +16,11 @@ from nflpredictor.features.positions import (
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-BOX_SCORES = REPO_ROOT / "Data" / "processed" / "box_scores_2024.csv"
+BOX_SCORES = REPO_ROOT / "Data" / "processed" / "box_scores_all.csv"
 
 
 def test_every_real_position_label_maps_to_a_bucket():
-    """FE-TEST-03: every box-score position observed in 2024 data must be mapped."""
+    """FE-TEST-03: every box-score position observed across 2020-2025 must map."""
     df = pd.read_csv(BOX_SCORES, dtype=str, keep_default_na=False)
     observed: set[str] = set()
     for slot_kind in ("HomeOff", "HomeDef", "AwayOff", "AwayDef"):
@@ -59,20 +59,27 @@ def test_canonical_slots_per_side_order():
 
 
 def test_specific_bucket_mappings():
-    # Sanity checks for tricky cases.
+    # Sanity checks for tricky cases, including dual labels and the new
+    # multi-season single labels (HB, ILB, SAF).
     assert bucket_for_position("FB") == "RB"
+    assert bucket_for_position("HB") == "RB"
     assert bucket_for_position("OT") == "OL"
     assert bucket_for_position("OG") == "OL"
     assert bucket_for_position("C") == "OL"
     assert bucket_for_position("NT") == "DL"
     assert bucket_for_position("DE") == "DL"
     assert bucket_for_position("MLB") == "LB"
+    assert bucket_for_position("ILB") == "LB"
     assert bucket_for_position("FS") == "DB"
     assert bucket_for_position("SS") == "DB"
+    assert bucket_for_position("SAF") == "DB"
+    # Dual labels resolve on the first /-delimited token.
+    assert bucket_for_position("C/G") == "OL"
+    assert bucket_for_position("FB/RB") == "RB"
+    assert bucket_for_position("WR/RS") == "WR"
+    assert bucket_for_position("DE/LB") == "DL"
 
 
-def test_position_buckets_keys_are_unique():
-    # Defensive: a duplicate key in POSITION_BUCKETS would silently override.
-    # POSITION_BUCKETS is a dict literal so this is automatic, but the count
-    # acts as a regression alarm if someone adds an entry.
-    assert len(POSITION_BUCKETS) == 23
+def test_position_buckets_count():
+    # Regression alarm if someone adds or removes a single-label mapping.
+    assert len(POSITION_BUCKETS) == 26

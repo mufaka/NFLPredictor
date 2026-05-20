@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 
-# Box-score position label → canonical bucket (§4.3).
-# Covers every label observed in Data/processed/box_scores_2024.csv as of
-# 2026-05-18: {C, CB, DB, DE, DL, DT, FB, FS, G, LB, MLB, NT, OG, OL, OLB,
-# OT, QB, RB, S, SS, T, TE, WR}.
+# Single box-score position label → canonical bucket (§4.3). Dual labels
+# such as ``C/G`` or ``FB/RB`` are resolved by :func:`bucket_for_position`
+# on the first ``/``-delimited token, so only single labels appear here.
+# Covers every first-token label observed across box_scores_2020-2025.
 POSITION_BUCKETS: dict[str, str] = {
     # QB
     "QB": "QB",
-    # RB (running back family — includes fullback)
+    # RB (running back family — includes fullback and the HB label)
     "RB": "RB",
+    "HB": "RB",
     "FB": "RB",
     # WR
     "WR": "WR",
@@ -29,14 +30,16 @@ POSITION_BUCKETS: dict[str, str] = {
     "DT": "DL",
     "NT": "DL",
     "DE": "DL",
-    # LB
+    # LB (linebackers — middle, outside, inside, generic)
     "LB":  "LB",
     "MLB": "LB",
     "OLB": "LB",
+    "ILB": "LB",
     # DB (defensive backs — corners, safeties, generic)
     "DB": "DB",
     "CB": "DB",
     "S":  "DB",
+    "SAF": "DB",
     "FS": "DB",
     "SS": "DB",
 }
@@ -75,14 +78,17 @@ CANONICAL_BPOS_SLOTS_PER_SIDE: tuple[str, ...] = _per_side_slots()
 def bucket_for_position(box_score_position: str) -> str:
     """Return the canonical bucket for a box-score position label (§4.3).
 
-    Raises ``KeyError`` with a clear message for unmapped labels (FE-POS-03);
-    new labels require a code change here and a ``normalization_version`` bump.
+    Dual labels (``C/G``, ``FB/RB``, ``WR/RS``, …) are resolved on their
+    first ``/``-delimited token — the player's primary position. Raises
+    ``KeyError`` with a clear message for unmapped labels (FE-POS-03); new
+    labels require a code change here and a ``normalization_version`` bump.
     """
+    primary = box_score_position.split("/", 1)[0]
     try:
-        return POSITION_BUCKETS[box_score_position]
+        return POSITION_BUCKETS[primary]
     except KeyError as exc:
         raise KeyError(
-            f"box-score position label {box_score_position!r} is not in the "
-            f"canonical taxonomy; add a mapping in positions.POSITION_BUCKETS "
-            f"and bump normalization_version"
+            f"box-score position label {box_score_position!r} (primary "
+            f"token {primary!r}) is not in the canonical taxonomy; add a "
+            f"mapping in positions.POSITION_BUCKETS and bump normalization_version"
         ) from exc

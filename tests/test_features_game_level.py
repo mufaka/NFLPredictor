@@ -35,6 +35,7 @@ def test_days_rest_first_game_is_nan():
     """A team's first game of the season produces NaN per FE-GAME-08."""
     df = pd.DataFrame({
         "GameId": ["g1"],
+        "season": ["2024"],
         "GameDate": ["2024-09-08"],
         "HomeTeamCode": ["kan"],
         "AwayTeamCode": ["rav"],
@@ -47,6 +48,7 @@ def test_days_rest_first_game_is_nan():
 def test_days_rest_sunday_to_sunday_is_seven():
     df = pd.DataFrame({
         "GameId": ["g1", "g2"],
+        "season": ["2024", "2024"],
         "GameDate": ["2024-09-08", "2024-09-15"],
         "HomeTeamCode": ["kan", "kan"],
         "AwayTeamCode": ["rav", "buf"],
@@ -61,6 +63,7 @@ def test_days_rest_sunday_to_sunday_is_seven():
 def test_days_rest_sunday_to_thursday_is_four():
     df = pd.DataFrame({
         "GameId": ["g1", "g2"],
+        "season": ["2024", "2024"],
         "GameDate": ["2024-09-08", "2024-09-12"],
         "HomeTeamCode": ["kan", "buf"],
         "AwayTeamCode": ["rav", "kan"],
@@ -73,6 +76,7 @@ def test_days_rest_sunday_to_thursday_is_four():
 def test_days_rest_dtype_is_float64():
     df = pd.DataFrame({
         "GameId": ["g1"],
+        "season": ["2024"],
         "GameDate": ["2024-09-08"],
         "HomeTeamCode": ["kan"],
         "AwayTeamCode": ["rav"],
@@ -85,6 +89,7 @@ def test_days_rest_dtype_is_float64():
 def _three_game_frame() -> pd.DataFrame:
     return pd.DataFrame({
         "GameId": ["g1", "g2", "g3"],
+        "season": ["2024", "2024", "2024"],
         "GameDate": ["2024-09-08", "2024-09-15", "2024-09-22"],
         "DayOfWeek": ["Sunday", "Sunday", "Sunday"],
         "StartTime": ["1:00pm", "4:25pm", "8:20pm"],

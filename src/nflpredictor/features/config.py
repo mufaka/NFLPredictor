@@ -191,6 +191,6 @@ def validate_madden_columns_exist(
     missing = [c for c in config.madden_columns if c not in header_set]
     if missing:
         raise FeatureConfigError(
-            f"madden_columns references columns not in madden_2024.csv header: "
+            f"madden_columns references columns not in madden_all.csv header: "
             f"{missing}"
         )

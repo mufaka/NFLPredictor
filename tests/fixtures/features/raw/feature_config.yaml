@@ -1,11 +1,11 @@
-normalization_version: "v1"
+normalization_version: "v2"
 
 madden_columns:
-  - "Overall Rating"
-  - "Archetype"
+  - "overallrating"
+  - "archetype"
 
 madden_categorical_columns:
-  - "Archetype"
+  - "archetype"
 
 game_features:
   weather: parsed              # parsed | skip

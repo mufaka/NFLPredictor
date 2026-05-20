@@ -1,51 +1,52 @@
 {
   "build_timestamp_utc": "FIXTURE_TIMESTAMP",
   "column_counts": {
-    "features_flat_2024.parquet": {
-      "game_id": 1,
+    "features_flat_all.parquet": {
       "game_level": 12,
+      "identifiers": 2,
       "labels": 2,
       "officials": 7,
       "slot_madden": 88,
       "slot_matched": 44,
       "slot_position": 44,
-      "total": 202,
+      "total": 203,
       "weather": 4
     },
-    "features_pos_2024.parquet": {
-      "game_id": 1,
+    "features_pos_all.parquet": {
       "game_level": 12,
+      "identifiers": 2,
       "labels": 2,
       "officials": 7,
       "slot_madden": 116,
       "slot_matched": 58,
       "slot_present": 58,
-      "total": 258,
+      "total": 259,
       "weather": 4
     }
   },
-  "feature_config_sha256": "dc8b006581758b20c7032807866eecbaaaa2c333cb093acae934b7c53e7c6679",
-  "git_commit": "1b2617cb62856e171d72b07c005aa1cf357e73fe",
-  "normalization_version": "v1",
+  "feature_config_sha256": "e2d9f7792e58b60ee8e154afe0cdb3df939734cbae8cc86ca4ab6f90ae67d4b7",
+  "git_commit": "32c2dbea1f60d51b632536419d7287ab754fef81",
+  "normalization_version": "v2",
   "output_sha256": {
-    "Data/processed/feature_vocab.json": "d711da9e0931dfeefb834bb233ac7afc52f6f99d8a7114c3ccfcde4146ff4128",
-    "Data/processed/features_flat_2024.parquet": "709a1b08f4930e9f24ab0e23dad51957050340d5e90aef44e1822db0761a0ec3",
-    "Data/processed/features_pos_2024.parquet": "072120aceb35d3aec360bc887e5763fe530d587e549cbad75f4c97937d81212b"
+    "Data/processed/feature_vocab.json": "17579992c7b27d001daa80ababa90881592a84c9bd72606fbef56593db3a9551",
+    "Data/processed/features_flat_all.parquet": "d49ab3129a68ce62e89e1952dbe5501192e5db6f636c479ec249f7a3e44800db",
+    "Data/processed/features_pos_all.parquet": "6f31570882331467eddd968383d4efb49a30cf60bebe63b7a92b46210c1d1116"
   },
   "phase1_manifest_git_commit": "fixture-phase1",
   "phase1_source_sha256": {
-    "Data/processed/box_scores_2024.csv": "32bd4bf61fe0f66905641d130eddccf7fefe31fc24623ab0eacb03d5484e7356",
-    "Data/processed/madden_2024.csv": "75cda6c0d32591e25cb999b934e5d78d525e2bfc8909beb206015d2088209ae3"
+    "Data/processed/box_scores_all.csv": "5c8ecd2d557716b7a94dd845bca21211ea94da4459167551bb361831c8a3c4b6",
+    "Data/processed/madden_all.csv": "aff30a5240832a4b42ce263e0d6dedf75299d6a8816a368728a23fdc7a9b168f"
   },
+  "row_count": 2,
   "vocab_sizes": {
-    "Archetype": 24,
-    "coaches": 2,
+    "archetype": 48,
+    "coaches": 4,
     "day_of_week": 1,
-    "officials": 7,
-    "positions": 15,
+    "officials": 14,
+    "positions": 18,
     "roof": 1,
-    "stadium": 1,
+    "stadium": 2,
     "surface": 1,
-    "team_codes": 2
+    "team_codes": 4
   }
 }
