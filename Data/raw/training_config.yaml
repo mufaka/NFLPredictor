@@ -24,6 +24,10 @@ mlp:
   activation: "gelu"
   dropout: 0.1
 
+# Embedding dims per high-cardinality vocab key. team_codes / coaches /
+# officials are listed in NON_MODEL_VOCAB_KEYS (train/encoders.py) — they are
+# identity-only and currently excluded from the model input, so their dims
+# here are inert. They are kept for when those keys gain a numeric rating.
 embedding_dims:
   archetype:   16
   team_codes:   8

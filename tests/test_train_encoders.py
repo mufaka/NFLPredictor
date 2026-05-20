@@ -10,6 +10,7 @@ import torch
 
 from nflpredictor.train.encoders import (
     LOW_CARD_THRESHOLD,
+    NON_MODEL_VOCAB_KEYS,
     NULL_BUMP,
     ColumnClassification,
     FeatureEncoder,
@@ -30,23 +31,37 @@ REAL_PROCESSED = REPO_ROOT / "Data" / "processed"
 
 
 def _synthetic_vocab() -> dict[str, list[str]]:
-    """A small vocab spanning both sides of the LOW_CARD_THRESHOLD boundary."""
+    """A small vocab spanning both sides of the LOW_CARD_THRESHOLD boundary.
+
+    ``archetype`` is the representative high-card vocab shared across two
+    physical columns (a real model feature). ``team_codes`` is high-card too
+    but listed in NON_MODEL_VOCAB_KEYS — it must never reach the model.
+    """
     return {
-        "roof": ["a", "b", "c", "d"],                # size 4 → low-card
+        "roof": ["a", "b", "c", "d"],                    # size 4 → low-card
         "stadium": [f"stadium_{i}" for i in range(20)],  # size 20 → high-card
-        "team_codes": [f"team_{i}" for i in range(12)],  # size 12 → high-card
+        "archetype": [f"arch_{i}" for i in range(12)],   # size 12 → high-card feature
+        "team_codes": [f"team_{i}" for i in range(12)],  # high-card, NON-MODEL
+        "coaches": [f"coach_{i}" for i in range(40)],    # high-card, NON-MODEL
+        "officials": [f"ref_{i}" for i in range(50)],    # high-card, NON-MODEL
     }
 
 
 def _synthetic_feature_columns() -> list[str]:
     return [
         "GameId",
+        "season",
         "week",
         "days_rest_home",
         "roof",
         "stadium",
+        "home_qb_archetype",
+        "away_qb_archetype",
         "home_team_code",
         "away_team_code",
+        "home_coach",
+        "away_coach",
+        "official_referee",
         "home_score",
         "away_score",
     ]
@@ -57,20 +72,40 @@ def _synthetic_column_vocab_keys() -> dict[str, str]:
     return {
         "roof": "roof",
         "stadium": "stadium",
+        "home_qb_archetype": "archetype",
+        "away_qb_archetype": "archetype",
         "home_team_code": "team_codes",
         "away_team_code": "team_codes",
+        "home_coach": "coaches",
+        "away_coach": "coaches",
+        "official_referee": "officials",
     }
+
+
+# Just the categoricals that survive as model features (NON_MODEL keys dropped).
+_MODEL_COLUMN_VOCAB_KEYS: dict[str, str] = {
+    "roof": "roof",
+    "stadium": "stadium",
+    "home_qb_archetype": "archetype",
+    "away_qb_archetype": "archetype",
+}
 
 
 def _synthetic_df() -> pd.DataFrame:
     return pd.DataFrame({
         "GameId": ["G1", "G2", "G3", "G4", "G5"],
+        "season": [2020, 2021, 2022, 2023, 2024],
         "week": [1, 2, 3, 4, 5],
         "days_rest_home": [7.0, 7.0, 4.0, 6.0, 7.0],
         "roof": [0, 1, 0, 2, 3],
         "stadium": [0, 5, 12, 19, 3],
+        "home_qb_archetype": [0, 1, 2, 3, 4],
+        "away_qb_archetype": [5, 6, 7, 8, 9],
         "home_team_code": [1, 2, 3, 4, 5],
         "away_team_code": [6, 7, 8, 9, 10],
+        "home_coach": [0, 1, 2, 3, 4],
+        "away_coach": [5, 6, 7, 8, 9],
+        "official_referee": [0, 1, 2, 3, 4],
         "home_score": [21.0, 24.0, 17.0, 30.0, 14.0],
         "away_score": [14.0, 27.0, 20.0, 23.0, 24.0],
     })
@@ -84,14 +119,42 @@ def test_classify_uses_column_vocab_keys_map() -> None:
     vocab = _synthetic_vocab()
     cvk = _synthetic_column_vocab_keys()
     cls = classify_columns(_synthetic_feature_columns(), vocab, cvk)
-    # GameId dropped; labels split out; week + days_rest_home numeric (absent from map).
+    # GameId + season dropped (identifiers); labels split out; week +
+    # days_rest_home numeric (absent from map).
     assert cls.numeric == ("days_rest_home", "week")
-    # roof has vocab size 4 → low-card. stadium=20, team_codes=12 → high-card.
+    # roof has vocab size 4 → low-card. stadium=20, archetype=12 → high-card.
+    # team_codes/coaches/officials are NON-MODEL and never classified.
     assert cls.low_card_categorical == ("roof",)
-    assert sorted(cls.high_card_categorical) == ["away_team_code", "home_team_code", "stadium"]
+    assert sorted(cls.high_card_categorical) == ["away_qb_archetype", "home_qb_archetype", "stadium"]
     assert cls.labels == ("away_score", "home_score")
-    # Vocab routing comes from the map directly.
-    assert cls.column_vocab_key == cvk
+    # Vocab routing covers only the surviving model categoricals.
+    assert cls.column_vocab_key == _MODEL_COLUMN_VOCAB_KEYS
+
+
+def test_classify_excludes_identity_categoricals() -> None:
+    """Team / coach / official columns stay in the parquet but never reach the model.
+
+    They encode raw identity, not a rated attribute, so feeding them to the
+    learned rungs would just memorize team-level scoring.
+    """
+    vocab = _synthetic_vocab()
+    cvk = _synthetic_column_vocab_keys()
+    cls = classify_columns(_synthetic_feature_columns(), vocab, cvk)
+    classified = (
+        set(cls.numeric)
+        | set(cls.low_card_categorical)
+        | set(cls.high_card_categorical)
+        | set(cls.labels)
+    )
+    for identity_col in (
+        "home_team_code", "away_team_code",
+        "home_coach", "away_coach",
+        "official_referee",
+    ):
+        assert identity_col not in classified
+        assert identity_col not in cls.column_vocab_key
+    # The excluded vocab keys are exactly the documented NON_MODEL set.
+    assert NON_MODEL_VOCAB_KEYS == frozenset({"team_codes", "coaches", "officials"})
 
 
 def test_classify_unknown_columns_become_numeric() -> None:
@@ -147,13 +210,13 @@ def test_d_in_arithmetic() -> None:
     """
     vocab = _synthetic_vocab()
     cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
-    emb_dims = {"stadium": 6, "team_codes": 4}
+    emb_dims = {"stadium": 6, "archetype": 4}
     enc = FeatureEncoder(cls, vocab, emb_dims)
     expected = (
         2                           # numeric: days_rest_home, week
         + (4 + 1)                   # roof one-hot (vocab size 4 + 1 null)
         + 6                         # stadium embedding (dim 6) × 1 col
-        + 4 + 4                     # team_codes embedding (dim 4) × 2 cols
+        + 4 + 4                     # archetype embedding (dim 4) × 2 cols
     )
     assert enc.d_in == expected
 
@@ -166,15 +229,15 @@ def test_null_sentinel_lookup() -> None:
     """
     vocab = _synthetic_vocab()
     cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
-    enc = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
+    enc = FeatureEncoder(cls, vocab, {"stadium": 6, "archetype": 4})
     df = pd.DataFrame({
         "GameId": ["null1", "null2"],
         "week": [1, 2],
         "days_rest_home": [7.0, 7.0],
-        "roof": [-1, 0],            # first row has NULL roof
-        "stadium": [-1, 5],         # first row has NULL stadium
-        "home_team_code": [-1, 1],  # first row has NULL home team
-        "away_team_code": [0, 1],
+        "roof": [-1, 0],                  # first row has NULL roof
+        "stadium": [-1, 5],               # first row has NULL stadium
+        "home_qb_archetype": [-1, 1],     # first row has NULL home archetype
+        "away_qb_archetype": [0, 1],
         "home_score": [0.0, 0.0],
         "away_score": [0.0, 0.0],
     })
@@ -192,7 +255,7 @@ def test_null_bump_constant() -> None:
 def test_forward_shape() -> None:
     vocab = _synthetic_vocab()
     cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
-    enc = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
+    enc = FeatureEncoder(cls, vocab, {"stadium": 6, "archetype": 4})
     batch = prepare_batch(_synthetic_df(), cls)
     out = enc(batch["numeric"], batch["low_card"], batch["high_card"])
     assert out.shape == (5, enc.d_in)
@@ -200,12 +263,12 @@ def test_forward_shape() -> None:
 
 
 def test_shared_embedding_across_columns_uses_same_table() -> None:
-    """home_team_code and away_team_code share the team_codes embedding (TR-CAT-02 / sharing)."""
+    """home_qb_archetype and away_qb_archetype share the archetype embedding (TR-CAT-02 / sharing)."""
     vocab = _synthetic_vocab()
     cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
-    enc = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
+    enc = FeatureEncoder(cls, vocab, {"stadium": 6, "archetype": 4})
     # Only one nn.Embedding per high-card vocab key in use (not one per physical column).
-    expected_keys = {"stadium", "team_codes"}
+    expected_keys = {"stadium", "archetype"}
     assert set(enc.embeddings.keys()) == expected_keys
 
 
@@ -215,11 +278,11 @@ def test_seeded_init_is_reproducible() -> None:
     cls = classify_columns(_synthetic_feature_columns(), vocab, _synthetic_column_vocab_keys())
 
     torch.manual_seed(1729)
-    enc_a = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
+    enc_a = FeatureEncoder(cls, vocab, {"stadium": 6, "archetype": 4})
     weights_a = {k: enc_a.embeddings[k].weight.detach().clone() for k in enc_a.embeddings}
 
     torch.manual_seed(1729)
-    enc_b = FeatureEncoder(cls, vocab, {"stadium": 6, "team_codes": 4})
+    enc_b = FeatureEncoder(cls, vocab, {"stadium": 6, "archetype": 4})
     for k in enc_b.embeddings:
         assert torch.equal(weights_a[k], enc_b.embeddings[k].weight)
 
@@ -239,11 +302,32 @@ def test_real_features_classify_as_expected_for_flat() -> None:
     cls = classify_columns(list(flat.columns), vocab, cvk)
     # All low-card vocab keys (size ≤ 8) appear in low_card columns.
     assert set(cls.low_card_categorical) == {"day_of_week", "roof", "surface"}
-    # High-card cols include all six high-card vocab keys.
+    # High-card cols cover every high-card vocab key except the NON-MODEL ones
+    # (team codes, coaches, officials are identity-only — never model features).
     high_card_keys_in_use = {cls.column_vocab_key[c] for c in cls.high_card_categorical}
-    assert high_card_keys_in_use == high_card_vocab_keys(vocab)
+    assert high_card_keys_in_use == high_card_vocab_keys(vocab) - NON_MODEL_VOCAB_KEYS
     # Labels routed out of feature inputs.
     assert set(cls.labels) == {"home_score", "away_score"}
+
+
+def test_real_features_exclude_identity_categoricals() -> None:
+    """team_code / coach / official columns are present in the parquet but not classified."""
+    vocab = load_vocab(REAL_PROCESSED)
+    cvk = load_column_vocab_keys(REAL_PROCESSED)
+    flat = load_features(REAL_PROCESSED, "flat")
+    # The identity columns physically exist (the team_mean baseline reads them).
+    assert {"home_team_code", "away_team_code", "home_coach", "away_coach"} <= set(flat.columns)
+    cls = classify_columns(list(flat.columns), vocab, cvk)
+    classified = (
+        set(cls.numeric)
+        | set(cls.low_card_categorical)
+        | set(cls.high_card_categorical)
+        | set(cls.labels)
+    )
+    # No column routed to a NON_MODEL vocab key survives into the classification.
+    for col, key in cvk.items():
+        if key in NON_MODEL_VOCAB_KEYS:
+            assert col not in classified
 
 
 def test_real_features_pos_lacks_positions_columns() -> None:
@@ -254,8 +338,10 @@ def test_real_features_pos_lacks_positions_columns() -> None:
     cls = classify_columns(list(pos.columns), vocab, cvk)
     high_card_keys_in_use = {cls.column_vocab_key[c] for c in cls.high_card_categorical}
     assert "positions" not in high_card_keys_in_use
-    # The other 5 high-card vocabs are present.
-    assert high_card_keys_in_use == high_card_vocab_keys(vocab) - {"positions"}
+    # Every other high-card vocab key is present except positions + NON-MODEL keys.
+    assert high_card_keys_in_use == (
+        high_card_vocab_keys(vocab) - {"positions"} - NON_MODEL_VOCAB_KEYS
+    )
 
 
 def test_real_label_parity_passes() -> None:

@@ -34,6 +34,18 @@ GAME_ID_COLUMN: str = "GameId"
 # out whole seasons, but the model must not train on it.
 IDENTIFIER_COLUMNS: tuple[str, ...] = ("GameId", "season")
 
+# Categorical vocab keys deliberately kept out of the learned model's input.
+# These encode raw *identity* — which team, which coach, which official — not
+# a rated attribute. Feeding them to the linear/mlp rungs lets the model
+# memorize team/coach-level scoring (precisely what the ``team_mean`` baseline
+# already measures) instead of generalizing from player ratings, which is the
+# whole premise of the model. The physical columns stay in the Phase 2 parquet
+# — the ``team_mean`` trivial rung and the Phase 5 by-team breakdown both read
+# ``home_team_code``/``away_team_code`` directly — they are simply never
+# classified as features. Revisit a key here once it gains a numeric rating to
+# encode in place of bare identity.
+NON_MODEL_VOCAB_KEYS: frozenset[str] = frozenset({"team_codes", "coaches", "officials"})
+
 # Default cardinality boundary for low-card vs high-card; overridable via
 # training_config.yaml's ``one_hot_threshold`` (TR-CAT-01 / TR-CAT-02).
 LOW_CARD_THRESHOLD: int = 8
@@ -86,6 +98,10 @@ def classify_columns(
     suffix-based pattern match, so any new categorical column added via
     ``feature_config.yaml`` is routed automatically.
 
+    Columns whose vocab key is in :data:`NON_MODEL_VOCAB_KEYS` (team codes,
+    coaches, officials) are dropped from the classification entirely: they stay
+    in the parquet but are neither numeric nor categorical model inputs.
+
     ``one_hot_threshold`` is the configurable cardinality boundary (default 8,
     overridable via training_config's ``one_hot_threshold``).
     """
@@ -104,6 +120,9 @@ def classify_columns(
         vocab_key = column_vocab_keys.get(col)
         if vocab_key is None:
             numeric.append(col)
+            continue
+        if vocab_key in NON_MODEL_VOCAB_KEYS:
+            # Identity-only categorical — kept in the parquet, never a feature.
             continue
         if vocab_key not in vocab:
             raise KeyError(
