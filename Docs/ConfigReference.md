@@ -42,37 +42,36 @@ Top-level keys (all required):
 | Key | Type | Notes |
 | --- | --- | --- |
 | `normalization_version` | non-empty string | Tag stamped into `feature_manifest.json`. |
-| `madden_columns` | non-empty list of strings | Columns from `Data/processed/madden_2024.csv` to expand per-slot. |
+| `madden_columns` | non-empty list of strings | Columns from `Data/processed/madden_all.csv` to expand per-slot. |
 | `madden_categorical_columns` | list of strings (may be empty) | Must be a subset of `madden_columns`. Any column whose Madden values are non-numeric **must** appear here, or the Phase 2 build raises `ValueError` from `slots.py`. |
 | `game_features` | mapping | See below. |
 | `slot_shapes` | non-empty list | Subset of `[flat, pos]`. |
 
 ### `madden_columns` — enumerable list
 
-The validator accepts any column header from `Data/processed/madden_2024.csv`
-(which is `maddennfl24fullplayerratings.csv` after Phase 1's whitespace strip on
-` Total Salary ` and ` Signing Bonus `). The full set:
+The validator accepts any column header from `Data/processed/madden_all.csv`.
+The multi-year Madden source uses a 56-column lowercase schema; the build drops
+the source's own `madden_id` on read and adds the build-assigned `madden_id`
+(first) and `matched` (last). The columns available to `madden_columns`:
 
 ```
-Team, Position, Full Name, Overall Rating, Jersey Number, Speed, Acceleration,
-Strength, Agility, Awareness, Catching, Carrying, Throw Power, Kick Power,
-Kick Accuracy, Run Block, Pass Block, Tackle, Break Tackle, Jumping,
-Kick Return, Injury, Stamina, Toughness, Trucking, Change Of Direction,
-Ball Carrier Vision, Stiff Arm, Spin Move, Juke Move, Impact Blocking,
-Run Block Power, Run Block Finesse, Pass Block Power, Pass Block Finesse,
-Lead Block, Break Sack, Throw Under Pressure, Power Moves, Finesse Moves,
-Block Shedding, Pursuit, Play Recognition, Man Coverage, Zone Coverage,
-Spectacular Catch, Catch In Traffic, Short Route Running, Medium Route Running,
-Deep Route Running, Hit Power, Press, Release, Throw Accuracy Short,
-Throw Accuracy Mid, Throw Accuracy Deep, Play Action, Throw On The Run,
-Height, Weight, Age, Birthdate, Years Pro, Running Style, Archetype, College,
-Total Salary, Signing Bonus, Player Handness
+team, season, fullname, high_pos_group, position_group, position,
+overallrating, agility, acceleration, speed, stamina, strength, toughness,
+injury, awareness, jumping, trucking, archetype, runningstyle,
+changeofdirection, playrecognition, throwpower, throwaccuracyshort,
+throwaccuracymid, throwaccuracydeep, playaction, throwonrun, carrying,
+ballcarriervision, stiffarm, spinmove, jukemove, catching, shortrouterunning,
+midrouterunning, deeprouterunning, spectacularcatch, catchintraffic, release,
+runblocking, passblocking, impactblocking, mancoverage, zonecoverage, tackle,
+hitpower, press, pursuit, kickaccuracy, kickpower, return, jerseynumber,
+yearspro, age, birthdate
 ```
 
-Non-numeric (must also appear in `madden_categorical_columns` if used): `Team`,
-`Position`, `Full Name`, `Running Style`, `Archetype`, `College`,
-`Player Handness`. `Birthdate` is parsed as a date string and is also
-non-numeric.
+Non-numeric (must also appear in `madden_categorical_columns` if used): `team`,
+`fullname`, `high_pos_group`, `position_group`, `position`, `archetype`,
+`runningstyle`, `birthdate` (an ISO date string). Note `midrouterunning` is
+empty in five of the six seasons, and `birthdate` / `yearspro` are empty in
+some seasons — usable but sparse.
 
 Each entry in `madden_columns` becomes 22 columns in the `flat` shape
 (`HomeOff01_<col>` … `AwayDef11_<col>`) and 29 home + 29 away columns in the
@@ -95,23 +94,23 @@ home_team_code, away_team_code, home_coach, away_coach,
 days_rest_home, days_rest_away
 ```
 
-### Worked example: adding `Speed`, `Awareness`, and `Position`
+### Worked example: adding `speed`, `awareness`, and `position`
 
 ```yaml
 madden_columns:
-  - "Overall Rating"
-  - "Archetype"
-  - "Speed"          # numeric — no entry in madden_categorical_columns
-  - "Awareness"      # numeric
-  - "Position"       # non-numeric — also goes below
+  - "overallrating"
+  - "archetype"
+  - "speed"          # numeric — no entry in madden_categorical_columns
+  - "awareness"      # numeric
+  - "position"       # non-numeric — also goes below
 
 madden_categorical_columns:
-  - "Archetype"
-  - "Position"
+  - "archetype"
+  - "position"
 ```
 
 After saving, re-run `python -m nflpredictor.features` and the three
-downstream phases. `Position` becomes a new vocab key in `feature_vocab.json`
+downstream phases. `position` becomes a new vocab key in `feature_vocab.json`
 (distinct from the existing `positions` key, which is the box-score canonical
 taxonomy used by the `pos` shape). If its cardinality exceeds
 `one_hot_threshold`, add either `Position: <dim>` or rely on `_default` in
@@ -121,25 +120,25 @@ taxonomy used by the `pos` shape). If its cardinality exceeds
 
 ## `splits_config.yaml`
 
-Top-level keys (all required except `s3`, which becomes required when `S3` is in
-`strategies`):
+Splitting is by **whole season** (the week-based `S1`/`S3` strategies were
+removed in the multi-year migration). Top-level keys (all required):
 
 | Key | Type | Notes |
 | --- | --- | --- |
 | `splits_version` | non-empty string | Tag stamped into `splits_manifest.json`. |
-| `strategies` | non-empty list | Subset of `[S1, S3]`; duplicates rejected. |
-| `train_weeks` | `[start, end]` ints | `1 ≤ start ≤ end ≤ 18`. |
-| `val_weeks` | `[start, end]` ints | Must satisfy `val_weeks[0] == train_weeks[1] + 1`. |
-| `test_weeks` | `[start, end]` ints | Must satisfy `test_weeks[0] == val_weeks[1] + 1`. |
-| `s3.k_start` | int | Required iff `S3 ∈ strategies`. `1 ≤ k_start < val_weeks[1]`. |
+| `strategies` | non-empty list | Subset of `[season_holdout, loso_cv]`; duplicates rejected. |
+| `train_seasons` | non-empty list of ints | Distinct seasons in `[2020, 2025]`. |
+| `val_season` | int | A season in `[2020, 2025]`, not in `train_seasons`. |
+| `test_season` | int | A season in `[2020, 2025]`, distinct from `val_season` and not in `train_seasons`. |
 
-The three week ranges must be strictly increasing and **contiguous**: the
-validator rejects any gap or overlap. `s3.k_start` is the number of training
-weeks at the smallest expanding-window fold; the number of folds is
-`val_weeks[1] - k_start` for the v1 layout (k_start=6 → folds for k ∈ {6..14}).
-
-If `s3` is present but `S3` is not in `strategies`, the loader raises — the two
-must be kept in lockstep.
+`season_holdout` partitions every game by its season's role (train / val /
+test). `loso_cv` (leave-one-season-out CV) emits one fold per season in the
+rotation pool `train_seasons ∪ {val_season}`, with `test_season` held out of
+every fold. The role assignment must cover exactly the seasons present in the
+Phase 2 feature matrix — a season in the data with no role, or a role naming a
+season absent from the data, is a hard error (SP-CFG-04). The shipped default
+is `strategies: [season_holdout]` (loso_cv is opt-in at ≈6× training cost),
+train `[2020, 2021, 2022, 2023]` / val `2024` / test `2025`.
 
 ---
 
@@ -155,7 +154,7 @@ Top-level keys:
 | `one_hot_threshold` | no (default 8) | positive int | Cardinality boundary for categorical encoding: vocab size ≤ this → one-hot; > this → learned embedding. |
 | `rungs` | yes | non-empty list | Subset of `[mean, team_mean, linear, mlp]`; duplicates rejected. |
 | `shapes` | yes | non-empty list | Subset of `[flat, pos]`. |
-| `strategies` | yes | non-empty list | Subset of `[S1, S3]`. |
+| `strategies` | yes | non-empty list | Subset of `[season_holdout, loso_cv]`. Must be present in `splits_all.json`. |
 | `linear` | yes | mapping | See below. |
 | `mlp` | yes | mapping | See below. |
 | `embedding_dims` | yes | mapping | See below. |
@@ -192,22 +191,22 @@ the top-level `one_hot_threshold` knob. Vocab sizes are pulled live from
 `feature_vocab.json` at train time, so the required key set moves as the
 feature config changes.
 
-For the shipped feature config (Archetype + game-level defaults), the
+For the shipped feature config (archetype + game-level defaults), the
 high-cardinality vocab keys are:
 
 | Vocab key | Why it's high-card |
 | --- | --- |
-| `Archetype` | Madden archetype labels (Pro QB, Field General, …). |
+| `archetype` | Madden archetype labels (Pro QB, Field General, …). |
 | `team_codes` | 32 NFL team codes; backs `home_team_code` and `away_team_code`. |
-| `coaches` | Head coaches across the 2024 season. |
-| `officials` | Officiating crew members. |
+| `coaches` | Head coaches across the six seasons. |
+| `officials` | Officiating crew members across the six seasons. |
 | `positions` | Canonical position taxonomy used by the `pos` shape. |
-| `stadium` | NFL stadiums (~32). |
+| `stadium` | NFL stadiums. |
 
 Low-card keys (one-hot encoded, no embedding row needed under the default
 threshold): `roof`, `surface`, `day_of_week`. Any new Madden categorical
 column added via `feature_config.yaml` automatically becomes a new vocab key
-(named after the Madden column, e.g. `Position`, `College`). If its vocab
+(named after the Madden column, e.g. `position`). If its vocab
 grows past `one_hot_threshold`, the loader requires an embedding dim — pick
 between adding an explicit entry or relying on `_default`.
 
@@ -216,7 +215,7 @@ Example with the fallback:
 ```yaml
 embedding_dims:
   _default:    8     # covers any new high-card vocab key automatically
-  Archetype:   16    # explicit overrides for keys that warrant more capacity
+  archetype:   16    # explicit overrides for keys that warrant more capacity
   team_codes:   8
 ```
 
@@ -224,11 +223,11 @@ Without `_default`, the missing-key error names the offending vocab key:
 
 ```
 TrainingConfigError: embedding_dims is missing required high-cardinality
-vocab keys: ['Position']; either add explicit entries or add a '_default'
+vocab keys: ['position']; either add explicit entries or add a '_default'
 fallback.
 ```
 
-**Why per vocab key, not per column?** A single `Archetype: 16` entry backs
+**Why per vocab key, not per column?** A single `archetype: 16` entry backs
 all 44 per-slot `_madden_archetype` columns — they share one `nn.Embedding`.
 The "Field General" archetype gets the same vector whether the column is
 `HomeOff01_madden_archetype` or `AwayDef07_madden_archetype`. Per-column
@@ -236,7 +235,7 @@ embeddings would multiply parameter count without adding signal.
 
 **How does the encoder know which column maps to which vocab key?** Phase 2
 emits the `column_vocab_keys` map in `feature_vocab.json` (schema
-`vocab_version: "v2"`). Phase 4's encoder reads it directly — there are no
+`vocab_version: "v3"`). Phase 4's encoder reads it directly — there are no
 hard-coded suffix rules on column names. Any new categorical column added via
 `feature_config.yaml` is routed automatically.
 

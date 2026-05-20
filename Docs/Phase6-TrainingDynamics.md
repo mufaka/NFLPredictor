@@ -1,5 +1,7 @@
 # Phase 6 — Training Dynamics
 
+> **Revision note (multi-year).** Updated for the 2020–2025 migration: the split strategies are `season_holdout` and `loso_cv`, replacing the week-based `S1`/`S3`.
+
 A reader's guide to what happens inside `python -m nflpredictor.train` and how to read the per-epoch loss curves it emits to `Data/processed/training_loss_curves.parquet`.
 
 This doc and its [companion notebook](../notebooks/phase6_training_dynamics.ipynb) together cover the **diagnostic vocabulary** for training. Picking specific knobs to turn is **Phase 7's** job; this doc teaches you how to look at a loss curve and form a hypothesis worth handing to Phase 7.
@@ -13,11 +15,11 @@ The training build is a script — `python -m nflpredictor.train` — that runs 
 1. Seed RNGs from `seed + epoch` so per-epoch shuffles are deterministic per device (TR-TRAIN-03).
 2. For each epoch in `1..max_epochs`:
    * **Shuffle** the training games via `torch.randperm(n_train, generator=gen)`. Order is reproducible given the same `seed` and device.
-   * **Batch** the shuffled games into chunks of `batch_size` (v1 default: 32). The dataset is small enough (~180 games per S1 train slice; smaller per S3 fold) that an epoch is a handful of batches.
+   * **Batch** the shuffled games into chunks of `batch_size` (v1 default: 32). The dataset is small enough (~180 games per season_holdout train slice; smaller per loso_cv fold) that an epoch is a handful of batches.
    * For each batch: forward pass through the encoder + model, L1 loss against home/away labels, backward pass, optimizer step.
    * At end of epoch: one forward pass over the full val slice → records `(train_loss, val_loss, val_mae)` for that epoch.
 
-**"Epoch" vs. "batch" in this project's scale.** With ~180 training games and `batch_size = 32`, one epoch is ~6 optimizer steps. That's small. Practical implication: per-epoch loss curves are smoother in spirit than typical deep-learning loss curves (each epoch sees the whole dataset), but per-fold curves on the S3 strategy can be jagged because each fold trains on a much smaller slice (S3 fold k=6 trains on ~85 games — about 3 batches per epoch).
+**"Epoch" vs. "batch" in this project's scale.** With ~180 training games and `batch_size = 32`, one epoch is ~6 optimizer steps. That's small. Practical implication: per-epoch loss curves are smoother in spirit than typical deep-learning loss curves (each epoch sees the whole dataset), but per-fold curves on the loso_cv strategy can be jagged because each fold trains on a much smaller slice (loso_cv fold k=6 trains on ~85 games — about 3 batches per epoch).
 
 **Sample order is deterministic, not arbitrary.** Phase 4's determinism contract (TR-NF-01) requires that re-running on the same device produce byte-identical outputs. The per-epoch shuffle is therefore seeded as a function of the epoch number, not from a global generator state. Two runs starting from the same checkpoint walk the same sequence of batches.
 
@@ -85,7 +87,7 @@ The four canonical patterns you'll see when plotting `train_loss` and `val_loss`
 
 3. **Both flat from epoch 1** — *optimization stuck*. The optimizer isn't moving the loss. Almost always an LR issue (too small to escape the init plateau) or a feature-encoding bug (the model is seeing all-zero or all-sentinel inputs). Quick sanity check: does the **trivial-rung baseline beat this combination's val MAE** in `metrics_headline.json`? If yes, the learned rung is broken, not just slow.
 
-4. **Train bottomed, val high and flat** — *underfit with respect to the val distribution*. The model has fit the training data as much as it can but the residual val error reflects irreducible mismatch between train and val. On this project that's often the early-season-vs.-late-season distribution shift (Phase 3 S1 splits at week 12). Levers: more capacity (larger `hidden_dim`, larger `embedding_dim`), richer features (Phase 1 Madden columns we didn't include in v1), or the **S3 expanding-window protocol** which is specifically designed to amortize this shift.
+4. **Train bottomed, val high and flat** — *underfit with respect to the val distribution*. The model has fit the training data as much as it can but the residual val error reflects irreducible mismatch between train and val. On this project that's often the early-season-vs.-late-season distribution shift (Phase 3 season_holdout splits at week 12). Levers: more capacity (larger `hidden_dim`, larger `embedding_dim`), richer features (Phase 1 Madden columns we didn't include in v1), or the **loso_cv leave-one-season-out protocol** which is specifically designed to amortize this shift.
 
 In practice, real curves don't fit exactly one pattern. The useful question is: **which of the four does this combination *most look like*, and what's the lever closest to that diagnosis?**
 
@@ -103,7 +105,7 @@ A small mapping from diagnostic pattern to the field in `Data/raw/training_confi
 | Optimization stuck             | `lr` ↑ (carefully) — then inspect feature inputs | Try doubling the LR; if curves still flat, the issue is upstream — verify Phase 2 features for the affected combination aren't degenerate. |
 | Underfit                       | `hidden_dim` ↑ *or* `embedding_dim` ↑            | More capacity. Note the embedding-dim per-vocab keys in `embedding_dims:` — each entry is a separate knob.                           |
 | Asymmetric home/away error     | (no training-config lever — Phase 2 issue)       | If the loss is symmetric but the per-side errors aren't, the input encoding has dropped a signal. Inspect `feature_vocab.json`'s `column_vocab_keys` map. |
-| S3 worse than S1 on the same combination | `seed` (try 2–3 values)                | Could be small-fold variance; if a re-seed flips the conclusion, the gap was noise. If it doesn't, the gap is real.                  |
+| loso_cv worse than season_holdout on the same combination | `seed` (try 2–3 values)                | Could be small-fold variance; if a re-seed flips the conclusion, the gap was noise. If it doesn't, the gap is real.                  |
 
 The table is intentionally **not exhaustive** — Phase 7 will deepen it. The current goal is to give you a starting point when you open `training_config.yaml`.
 

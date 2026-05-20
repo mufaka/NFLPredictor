@@ -1,10 +1,10 @@
 # Phase 6 — Pipeline Walkthrough: one game, raw → predictions → plots
 
-**Walkthrough game**: `202411280dal` (Dallas Cowboys' Thanksgiving home opener, 2024 Week 13). This game ID is the DD-WT-01 commit — it lives at the top of this notebook so the trace is reproducible; changing it is a content edit, not a contract change.
+**Walkthrough game**: `202409050kan` (Kansas City Chiefs' home opener vs the Baltimore Ravens, 2024 Week 1). This game ID is the DD-WT-01 commit — it lives at the top of this notebook so the trace is reproducible; changing it is a content edit, not a contract change.
 
-It was picked because the fixture’s split assignment puts it in **S1.val** *and* **S3 fold k=12 val**, so every one of the 12 Phase 4 prediction parquets contains it. A single game traces the full output surface of the model ladder.
+It was picked because it is a 2024-season game, and the default season-holdout split places the whole 2024 season in **`season_holdout.val`**. So every one of the 6 Phase 4 prediction parquets emits a `val` row for it — a single game traces the full output surface of the model ladder.
 
-> **Data source note.** This notebook is authored against the train+evaluate fixture (`tests/fixtures/evaluate/`) so cells render real outputs on the CPU-only dev machine. After the CUDA machine has run the real Phase 4 + Phase 5 pipeline (populating `Data/processed/predictions/` and `Data/processed/evaluation/`), re-point `PROCESSED_DIR` at `Data/processed/` and re-execute the notebook. The regen command lives in `CLAUDE.md` (DD-WT-05). DD-WT-04: `Docs/Phase6-Walkthrough.md` is the `jupyter nbconvert --to markdown` export of this notebook; do not hand-edit it.
+> **Data source note.** This notebook is authored against the train+evaluate fixture (`tests/fixtures/evaluate/`) so cells render real outputs on the CPU-only dev machine. After a full real Phase 4 + Phase 5 run (populating `Data/processed/predictions/` and `Data/processed/evaluation/`), re-point `PROCESSED_DIR` at `Data/processed/` and re-execute. DD-WT-04: `Docs/Phase6-Walkthrough.md` is the `jupyter nbconvert --to markdown` export of this notebook; do not hand-edit it.
 
 
 ```python
@@ -29,7 +29,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from nflpredictor.diagnostics import encoding, trace
 
-GAME_ID = "202411280dal"
+GAME_ID = "202409050kan"
 RAW_DIR = REPO_ROOT / "Data" / "raw"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "evaluate"
 
@@ -69,15 +69,15 @@ print(f"Staged processed_dir: {PROCESSED_DIR}")
 print("Contents:", sorted(p.name for p in PROCESSED_DIR.iterdir()))
 ```
 
-    Staged processed_dir: /tmp/phase6_walkthrough_65vzudyr
-    Contents: ['feature_manifest.json', 'feature_vocab.json', 'features_flat_2024.parquet', 'features_pos_2024.parquet', 'player_id_mapping.csv', 'predictions', 'splits_2024.json', 'splits_manifest.json', 'training_manifest.json']
+    Staged processed_dir: /tmp/phase6_walkthrough__e0f69aj
+    Contents: ['feature_manifest.json', 'feature_vocab.json', 'features_flat_all.parquet', 'features_pos_all.parquet', 'player_id_mapping.csv', 'predictions', 'splits_all.json', 'splits_manifest.json', 'training_manifest.json']
 
 
 ## 1. Game selection and rationale
 
-We chose `202411280dal` because it lands in *every* combination’s output: the **S1** val slice (so all 6 S1 prediction parquets emit a row for it) and **S3** fold `k=12`’s val slice (so all 6 S3 prediction parquets emit a row for it via that fold). That gives one game a full row across the 12 prediction parquets, which keeps Section 5 short and exhaustive.
+We chose `202409050kan` because it lands in every combination's output. The default split strategy is **season-holdout**: the whole 2024 season is the `val` slice, so all 6 `season_holdout` prediction parquets emit a `val` row for this game. That gives one game a full row across the prediction surface, which keeps Section 5 short and exhaustive.
 
-Membership is read straight from `splits_2024.json` via `trace.lookup_split_membership`.
+Membership is read straight from `splits_all.json` via `trace.lookup_split_membership`.
 
 
 ```python
@@ -86,19 +86,17 @@ print("Split membership for", GAME_ID, ":")
 print(json.dumps(splits_info, indent=2))
 ```
 
-    Split membership for 202411280dal :
+    Split membership for 202409050kan :
     {
-      "S1": "val",
-      "S3_folds": [
-        12
-      ],
-      "S3_test": false
+      "season_holdout": "val",
+      "loso_cv_val_seasons": [],
+      "loso_cv_in_test": false
     }
 
 
 ## 2. Phase 1 — raw box-score row + Madden join
 
-`trace.load_raw_game` returns the single row of `box_scores_2024.csv` matching `GameId`. `trace.resolve_starters` flattens the 44 starter slots (`HomeOff01..HomeDef11`, `AwayOff01..AwayDef11`) and joins each PFR-style `_ID` to its resolved `madden_id` via `player_id_mapping.csv`. The `note` column records which Phase 1 tier resolved the join (deterministic, fuzzy, override, or appended-unmatched).
+`trace.load_raw_game` derives the season from the `GameId` date prefix and returns the single matching row of that season's `box_scores_<YYYY>.csv`. `trace.resolve_starters` flattens the 44 starter slots (`HomeOff01..HomeDef11`, `AwayOff01..AwayDef11`) and joins each PFR-style `_ID` to its resolved `madden_id` via `player_id_mapping.csv`. The `note` column records which Phase 1 tier resolved the join (deterministic, fuzzy, override, or appended-unmatched).
 
 
 ```python
@@ -114,19 +112,19 @@ for col in header_cols:
 ```
 
     Game header (raw box-score row, abridged):
-               GameId: '202411280dal'
-             GameDate: '2024-11-28'
+               GameId: '202409050kan'
+             GameDate: '2024-09-05'
             DayOfWeek: 'Thursday'
-             HomeTeam: 'Dallas Cowboys'
-             AwayTeam: 'New York Giants'
-         HomeTeamCode: 'dal'
-         AwayTeamCode: 'nyg'
+             HomeTeam: 'Kansas City Chiefs'
+             AwayTeam: 'Baltimore Ravens'
+         HomeTeamCode: 'kan'
+         AwayTeamCode: 'rav'
             HomeScore: np.int64(27)
             AwayScore: np.int64(20)
-              Stadium: 'AT&T Stadium'
-                 Roof: 'retractable roof (closed)'
-              Surface: 'matrixturf'
-              Weather: nan
+              Stadium: 'GEHA Field at Arrowhead Stadium'
+                 Roof: 'outdoors'
+              Surface: 'grass'
+              Weather: '67 degrees, relative humidity 53%, wind 8 mph'
 
 
 
@@ -147,68 +145,69 @@ print(starters[starters['slot'].str.startswith('HomeDef')][cols].to_string(index
     Unmapped slots (no madden_id resolved): 0
     
     Home offense (11 slots):
-         slot position             name box_score_id  madden_id                                 note
-    HomeOff01       QB      Cooper Rush     RushCo00 2024-00930 tier2: deterministic team+name match
-    HomeOff02       RB      Rico Dowdle     DowdRi01 2024-00911 tier2: deterministic team+name match
-    HomeOff03       WR    Jalen Tolbert     TolbJa00 2024-00959 tier2: deterministic team+name match
-    HomeOff04       WR    Brandin Cooks     CookBr00 2024-00954 tier2: deterministic team+name match
-    HomeOff05       WR      CeeDee Lamb     LambCe00 2024-00955 tier2: deterministic team+name match
-    HomeOff06       TE Luke Schoonmaker     SchoLu00 2024-00950 tier2: deterministic team+name match
-    HomeOff07       OL      Tyler Smith     SmitTy02 2024-00924 tier2: deterministic team+name match
-    HomeOff08       OT     Tyler Guyton     GuytTy00 2024-02452   unmatched: appended with null-fill
-    HomeOff09        T   Terence Steele     SteeTe01 2024-00943 tier2: deterministic team+name match
-    HomeOff10       OG     Cooper Beebe     BeebCo00 2024-02445   unmatched: appended with null-fill
-    HomeOff11        C    Brock Hoffman     HoffBr00 2024-00890 tier2: deterministic team+name match
+         slot position                name box_score_id  madden_id                                                                    note
+    HomeOff01       QB     Patrick Mahomes     MahoPa00 2020-01118                                    tier2: deterministic team+name match
+    HomeOff02       RB       Isiah Pacheco     PachIs00 2022-01134                                    tier2: deterministic team+name match
+    HomeOff03       WR       Xavier Worthy     WortXa00 2024-01161                                    tier2: deterministic team+name match
+    HomeOff04       WR JuJu Smith-Schuster     SmitJu00 2020-01932                                    tier2: deterministic team+name match
+    HomeOff05       WR         Rashee Rice     RiceRa01 2023-01182                                    tier2: deterministic team+name match
+    HomeOff06       TE        Travis Kelce     KelcTr00 2020-01136                                    tier2: deterministic team+name match
+    HomeOff07        T       Jawaan Taylor     TaylJa02 2020-01053                                    tier2: deterministic team+name match
+    HomeOff08        T  Kingsley Suamataia     SuamKi00 2024-01122                                    tier2: deterministic team+name match
+    HomeOff09        G          Joe Thuney     ThunJo00 2020-01531 tier2: deterministic team+name match; position mismatch box=T madden=LG
+    HomeOff10        G          Trey Smith     SmitTr05 2021-01005 tier2: deterministic team+name match; position mismatch box=T madden=LG
+    HomeOff11        C      Creed Humphrey     HumpCr00 2021-00977                                    tier2: deterministic team+name match
     
     Home defense (11 slots):
-         slot position                name box_score_id  madden_id                                                                     note
-    HomeDef01       DE    Chauncey Golston     GolsCh00 2024-00915                                     tier2: deterministic team+name match
-    HomeDef02       DT          Mazi Smith     SmitMa06 2024-00901                                     tier2: deterministic team+name match
-    HomeDef03       DT      Osa Odighizuwa     OdigOs00 2024-00903                                     tier2: deterministic team+name match
-    HomeDef04      MLB      Eric Kendricks     KendEr00 2024-00631                              tier3: deterministic name match league-wide
-    HomeDef05       LB DeMarvion Overshown     OverDe00 2024-00926                                     tier2: deterministic team+name match
-    HomeDef06       LB       Micah Parsons     ParsMi00 2024-00936 tier2: deterministic team+name match; position mismatch box=LB madden=RE
-    HomeDef07       CB         DaRon Bland     BlanDa00 2024-00893                                     tier2: deterministic team+name match
-    HomeDef08       CB       Jourdan Lewis     LewiJo01 2024-00895                                     tier2: deterministic team+name match
-    HomeDef09       CB         Josh Butler     ButlJo00 2024-02447                                       unmatched: appended with null-fill
-    HomeDef10        S        Malik Hooker     HookMa00 2024-00906                                     tier2: deterministic team+name match
-    HomeDef11        S      Donovan Wilson     WilsDo01 2024-00944                                     tier2: deterministic team+name match
+         slot position                 name box_score_id  madden_id                                 note
+    HomeDef01       DE        Michael Danna     DannMi00 2020-01120 tier2: deterministic team+name match
+    HomeDef02       DE George Karlaftis III     KarlGe00 2022-01138 tier2: deterministic team+name match
+    HomeDef03       DT          Mike Pennel     PennMi00 2020-01088 tier2: deterministic team+name match
+    HomeDef04       DT          Chris Jones     JoneCh09 2020-01084 tier2: deterministic team+name match
+    HomeDef05       LB          Nick Bolton     BoltNi00 2021-01012 tier2: deterministic team+name match
+    HomeDef06       LB       Drue Tranquill     TranDr00 2020-01179 tier2: deterministic team+name match
+    HomeDef07       LB           Leo Chenal     ChenLe00 2022-01148 tier2: deterministic team+name match
+    HomeDef08       CB       Trent McDuffie     McDuTr00 2022-01121 tier2: deterministic team+name match
+    HomeDef09       CB        Jaylen Watson     WatsJa02 2022-01116 tier2: deterministic team+name match
+    HomeDef10        S          Justin Reid     ReidJu00 2020-00873 tier2: deterministic team+name match
+    HomeDef11        S           Bryan Cook     CookBr02 2022-01165 tier2: deterministic team+name match
 
 
 ## 3. Phase 2 — feature encoding
 
-`encoding.encode_one_game_flat` returns the row of `features_flat_2024.parquet` for this game (202 columns in the v1 default config). `encoding.encode_one_game_pos` returns the corresponding row of `features_pos_2024.parquet` (258 columns).
+`encoding.encode_one_game_flat` returns the row of `features_flat_all.parquet` for this game (203 columns in the default config). `encoding.encode_one_game_pos` returns the corresponding row of `features_pos_all.parquet` (259 columns). Both begin with the `GameId` and `season` identifier columns.
 
-`encoding.explain_categorical` walks one column through the encoder pipeline: raw value → vocab key → integer code (with Phase 4’s `NULL_BUMP = 1`) → routing (one-hot for vocab size ≤ 8, embedding for > 8). High-card vocabs (`team_codes`, `Archetype`, etc.) feed into a single shared `nn.Embedding` per vocab key (TR-CAT-05).
+`encoding.explain_categorical` walks one column through the encoder pipeline: raw value → vocab key → integer code (with Phase 4's `NULL_BUMP = 1`) → routing (one-hot for vocab size ≤ 8, embedding for > 8). High-card vocabs (`team_codes`, `archetype`, etc.) feed into a single shared `nn.Embedding` per vocab key (TR-CAT-05).
 
 
 ```python
 flat = encoding.encode_one_game_flat(GAME_ID, processed_dir=PROCESSED_DIR)
 print(f"features_flat row: {len(flat)} columns")
 show_cols = [
-    "GameId", "week", "day_of_week", "roof", "surface",
+    "GameId", "season", "week", "day_of_week", "roof", "surface",
     "home_team_code", "away_team_code",
-    "HomeOff01_position", "HomeOff01_madden_overall_rating", "HomeOff01_madden_archetype",
+    "HomeOff01_position", "HomeOff01_madden_overallrating", "HomeOff01_madden_archetype",
     "home_score", "away_score",
 ]
-print("\nSelected columns (game-level + one offensive slot + labels):")
+print("\nSelected columns (identifiers + game-level + one offensive slot + labels):")
 for col in show_cols:
     print(f"  {col:>35}: {flat[col]!r}")
 ```
 
-    features_flat row: 202 columns
+    features_flat row: 203 columns
     
-    Selected columns (game-level + one offensive slot + labels):
-                                   GameId: '202411280dal'
-                                     week: np.int64(13)
+    Selected columns (identifiers + game-level + one offensive slot + labels):
+                                   GameId: '202409050kan'
+                                   season: np.int32(2024)
+                                     week: np.int64(1)
                               day_of_week: np.int32(4)
-                                     roof: np.int32(2)
-                                  surface: np.int32(4)
-                           home_team_code: np.int32(8)
-                           away_team_code: np.int32(19)
-                       HomeOff01_position: np.int32(16)
-          HomeOff01_madden_overall_rating: np.float64(65.0)
-               HomeOff01_madden_archetype: np.int32(32)
+                                     roof: np.int32(1)
+                                  surface: np.int32(3)
+                           home_team_code: np.int32(14)
+                           away_team_code: np.int32(26)
+                       HomeOff01_position: np.int32(29)
+           HomeOff01_madden_overallrating: np.float64(99.0)
+               HomeOff01_madden_archetype: np.int32(31)
                                home_score: np.float64(27.0)
                                away_score: np.float64(20.0)
 
@@ -219,12 +218,12 @@ pos = encoding.encode_one_game_pos(GAME_ID, processed_dir=PROCESSED_DIR)
 print(f"features_pos row: {len(pos)} columns")
 # The pos shape groups Madden columns under canonical position slots:
 # HomeQB1 / HomeRB1..2 / HomeWR1..4 / HomeTE1..3 / HomeOL1..5 / HomeDL1..5 /
-# HomeLB1..4 / HomeCB1..4 / HomeS1..2 — 29 home slots — plus the same 29 on
-# the away side. Each slot has a _madden_overall_rating and a _madden_archetype.
+# HomeLB1..4 / HomeDB1..5 — 29 home slots — plus the same 29 on the away side.
+# Each slot has a _madden_overallrating and a _madden_archetype.
 show_cols = [
-    "HomeQB1_madden_overall_rating", "HomeQB1_madden_archetype",
-    "HomeRB1_madden_overall_rating", "HomeRB1_madden_archetype",
-    "AwayQB1_madden_overall_rating", "AwayQB1_madden_archetype",
+    "HomeQB1_madden_overallrating", "HomeQB1_madden_archetype",
+    "HomeRB1_madden_overallrating", "HomeRB1_madden_archetype",
+    "AwayQB1_madden_overallrating", "AwayQB1_madden_archetype",
     "home_score", "away_score",
 ]
 print("\nSelected pos columns (Home QB + Home RB1 + Away QB + labels):")
@@ -232,15 +231,15 @@ for col in show_cols:
     print(f"  {col:>40}: {pos[col]!r}")
 ```
 
-    features_pos row: 258 columns
+    features_pos row: 259 columns
     
     Selected pos columns (Home QB + Home RB1 + Away QB + labels):
-                 HomeQB1_madden_overall_rating: np.float64(65.0)
-                      HomeQB1_madden_archetype: np.int32(32)
-                 HomeRB1_madden_overall_rating: np.float64(67.0)
-                      HomeRB1_madden_archetype: np.int32(17)
-                 AwayQB1_madden_overall_rating: np.float64(64.0)
-                      AwayQB1_madden_archetype: np.int32(35)
+                  HomeQB1_madden_overallrating: np.float64(99.0)
+                      HomeQB1_madden_archetype: np.int32(31)
+                  HomeRB1_madden_overallrating: np.float64(87.0)
+                      HomeRB1_madden_archetype: np.int32(19)
+                  AwayQB1_madden_overallrating: np.float64(98.0)
+                      AwayQB1_madden_archetype: np.int32(31)
                                     home_score: np.float64(27.0)
                                     away_score: np.float64(20.0)
 
@@ -277,62 +276,62 @@ print(
 
     home_team_code →
     {
-      "raw": "dal",
+      "raw": "kan",
       "vocab_key": "team_codes",
       "vocab_size": 32,
-      "integer_code": 9,
+      "integer_code": 15,
       "routing": "embedding",
       "embedding_table": "team_codes"
     }
-      Phase 2 vocab index in features_flat['home_team_code']: 8
-      Phase 4 integer_code (= vocab_index + NULL_BUMP):       9
+      Phase 2 vocab index in features_flat['home_team_code']: 14
+      Phase 4 integer_code (= vocab_index + NULL_BUMP):       15
     
     roof →
     {
-      "raw": "retractable roof (closed)",
+      "raw": "outdoors",
       "vocab_key": "roof",
       "vocab_size": 4,
-      "integer_code": 3,
+      "integer_code": 2,
       "routing": "one_hot",
       "embedding_table": "roof"
     }
-      Phase 2 vocab index in features_flat['roof']: 2
-      Phase 4 integer_code (= vocab_index + NULL_BUMP): 3
+      Phase 2 vocab index in features_flat['roof']: 1
+      Phase 4 integer_code (= vocab_index + NULL_BUMP): 2
 
 
 ## 4. Phase 3 — split assignment
 
-Phase 3 produces two coexisting split strategies:
-* **S1** — a single train/val/test partition fixed by week boundaries (train Weeks 1–12 / val 13–15 / test 16–18).
-* **S3** — nine expanding-window `(train, val)` folds plus a shared held-out test slice identical to S1’s.
+Phase 3 splits by **whole season**. The default config uses one strategy:
+* **`season_holdout`** — a single partition: train = seasons 2020–2023, val = 2024, test = 2025.
 
-`trace.lookup_split_membership` (re-run here for the per-section narrative) reports both. The `S3_folds` list is the set of `k` values whose val slice contains the game; `S3_test` flags membership in S3’s held-out test slice.
+A second strategy, **`loso_cv`** (leave-one-season-out cross-validation), is available but opt-in. `trace.lookup_split_membership` reports both: `season_holdout` is the train/val/test bucket; `loso_cv_val_seasons` lists the held-out seasons of any loso_cv fold whose val slice contains the game (empty when loso_cv is not enabled); `loso_cv_in_test` flags membership in loso_cv's fixed test slice.
 
 
 ```python
 splits_info = trace.lookup_split_membership(GAME_ID, processed_dir=PROCESSED_DIR)
-print(f"S1 bucket            : {splits_info['S1']!r}")
-print(f"S3 folds (k where in val): {splits_info['S3_folds']}")
-print(f"S3 held-out test?    : {splits_info['S3_test']}")
+print(f"season_holdout bucket    : {splits_info['season_holdout']!r}")
+print(f"loso_cv val seasons      : {splits_info['loso_cv_val_seasons']}")
+print(f"loso_cv held-out test?   : {splits_info['loso_cv_in_test']}")
 
-# Decode for the reader: this combination means every S1 combination
-# emits one val prediction, and every S3 combination emits one prediction
-# from the fold whose val slice happens to include this game. 6 S1 + 6 S3 = 12 rows.
-expected_rows = (1 if splits_info["S1"] in ("val", "test") else 0) * 6 \
-              + len(splits_info["S3_folds"]) * 6
-print(f"\nExpected predictions for this game: {expected_rows} (6 S1 + 6 S3)")
+# Decode for the reader: a season_holdout val game means every season_holdout
+# combination emits exactly one val prediction for it — 6 combinations in the
+# default config, so 6 prediction rows.
+expected_rows = (
+    6 if splits_info["season_holdout"] in ("val", "test") else 0
+)
+print(f"\nExpected predictions for this game: {expected_rows} (6 season_holdout combinations)")
 ```
 
-    S1 bucket            : 'val'
-    S3 folds (k where in val): [12]
-    S3 held-out test?    : False
+    season_holdout bucket    : 'val'
+    loso_cv val seasons      : []
+    loso_cv held-out test?   : False
     
-    Expected predictions for this game: 12 (6 S1 + 6 S3)
+    Expected predictions for this game: 6 (6 season_holdout combinations)
 
 
 ## 5. Phase 4 — predictions per learned combination
 
-`trace.lookup_predictions` walks every `<rung>__<shape>__<strategy>.parquet` in `predictions/` and emits one row per `(combination_id, slice)` that produced a prediction for the game. For S1 parquets the slice is `"val"` or `"test"`; for S3 parquets the slice is `"fold_<k>"` (using the fold’s `k` value, not its zero-based index). Residuals are computed against `home_score` / `away_score` from `features_flat`.
+`trace.lookup_predictions` walks every `<rung>__<shape>__<strategy>.parquet` in `predictions/` and emits one row per `(combination_id, slice)` that produced a prediction for the game. For `season_holdout` parquets the slice is `"val"` or `"test"`; for `loso_cv` parquets the slice is `"fold_<val_season>"`. Residuals are computed against `home_score` / `away_score` from `features_flat`.
 
 
 ```python
@@ -341,21 +340,15 @@ print(f"Prediction rows for {GAME_ID}: {len(preds)}\n")
 print(preds.to_string(index=False))
 ```
 
-    Prediction rows for 202411280dal: 12
+    Prediction rows for 202409050kan: 6
     
-               combination_id   slice  pred_home  pred_away  true_home  true_away  residual_home  residual_away
-         rung0_mean__none__s1     val  23.041667  24.416667       27.0       20.0      -3.958333       4.416667
-         rung0_mean__none__s3 fold_12  23.041667  24.416667       27.0       20.0      -3.958333       4.416667
-    rung1_team_mean__none__s1     val  23.041667  17.000000       27.0       20.0      -3.958333      -3.000000
-    rung1_team_mean__none__s3 fold_12  23.041667  17.000000       27.0       20.0      -3.958333      -3.000000
-       rung2_linear__flat__s1     val  26.752432  21.401213       27.0       20.0      -0.247568       1.401213
-       rung2_linear__flat__s3 fold_12  28.832504  24.525169       27.0       20.0       1.832504       4.525169
-        rung2_linear__pos__s1     val  20.433571  27.587416       27.0       20.0      -6.566429       7.587416
-        rung2_linear__pos__s3 fold_12  20.433571  27.587416       27.0       20.0      -6.566429       7.587416
-          rung3_mlp__flat__s1     val  20.594995  19.101183       27.0       20.0      -6.405005      -0.898817
-          rung3_mlp__flat__s3 fold_12  20.594995  19.101183       27.0       20.0      -6.405005      -0.898817
-           rung3_mlp__pos__s1     val  22.062527  20.721458       27.0       20.0      -4.937473       0.721458
-           rung3_mlp__pos__s3 fold_12  22.062527  20.721458       27.0       20.0      -4.937473       0.721458
+                           combination_id slice  pred_home  pred_away  true_home  true_away  residual_home  residual_away
+         rung0_mean__none__season_holdout   val  22.187500  23.312500       27.0       20.0      -4.812500       3.312500
+    rung1_team_mean__none__season_holdout   val  27.000000  23.312500       27.0       20.0       0.000000       3.312500
+       rung2_linear__flat__season_holdout   val  30.981251  20.981707       27.0       20.0       3.981251       0.981707
+        rung2_linear__pos__season_holdout   val  33.782223  26.643696       27.0       20.0       6.782223       6.643696
+          rung3_mlp__flat__season_holdout   val  28.942469  30.320202       27.0       20.0       1.942469      10.320202
+           rung3_mlp__pos__season_holdout   val  26.201117  28.517235       27.0       20.0      -0.798883       8.517235
 
 
 ## 6. Phase 5 — locate the game on plots and breakdowns
@@ -380,8 +373,8 @@ print(
 )
 
 # To keep the printout readable, focus on one representative combination/slice
-# pairing (rung 2 linear flat, S1 val). The full universe is in the parquet.
-FOCUS_COMBO = "rung2_linear__flat__s1"
+# pairing (rung 2 linear flat, season_holdout val). The full universe is in the parquet.
+FOCUS_COMBO = "rung2_linear__flat__season_holdout"
 FOCUS_SLICE = "val"
 
 for name in ("by_team", "by_week", "by_home_away", "by_surface", "by_roof"):
@@ -410,30 +403,34 @@ for name in ("by_team", "by_week", "by_home_away", "by_surface", "by_roof"):
     print()
 ```
 
-    Game keys — week=13, home=dal, away=nyg, roof=2 ('retractable roof (closed)'), surface=4 ('matrixturf')
+    Game keys — week=1, home=kan, away=rav, roof=1 ('outdoors'), surface=3 ('grass')
     
-    --- by_team.parquet — cells the game contributes to for (rung2_linear__flat__s1, val) — 4/64 rows ---
-    team_code home_or_away  n_games       mae  mae_home  mae_away
-          dal         away        1 10.348879 15.207222  5.490536
-          dal         home        1  0.824390  0.247568  1.401213
-          nyg         away        1  0.824390  0.247568  1.401213
-          nyg         home        0       NaN       NaN       NaN
+    --- by_team.parquet — cells the game contributes to for (rung2_linear__flat__season_holdout, val) — 4/64 rows ---
+    team_code home_or_away  n_games      mae  mae_home  mae_away
+          kan         away        0      NaN       NaN       NaN
+          kan         home        1 2.481479  3.981251  0.981707
+          rav         away        1 2.481479  3.981251  0.981707
+          rav         home        0      NaN       NaN       NaN
     
-    --- by_week.parquet — cells the game contributes to for (rung2_linear__flat__s1, val) — 1/18 rows ---
+
+
+    --- by_week.parquet — cells the game contributes to for (rung2_linear__flat__season_holdout, val) — 1/18 rows ---
      week  n_games      mae  mae_home  mae_away
-       13        2 1.302568  1.520551  1.084586
+        1        4 6.509743  8.170909  4.848578
     
-    --- by_home_away.parquet — cells the game contributes to for (rung2_linear__flat__s1, val) — 2/2 rows ---
+
+
+    --- by_home_away.parquet — cells the game contributes to for (rung2_linear__flat__season_holdout, val) — 2/2 rows ---
     home_or_away  n_games      mae  mae_home  mae_away
-            away        6 8.201387  9.734038  6.668736
-            home        6 8.201387  9.734038  6.668736
+            away        4 6.509743  8.170909  4.848578
+            home        4 6.509743  8.170909  4.848578
     
-    --- by_surface.parquet — cells the game contributes to for (rung2_linear__flat__s1, val) — 1/6 rows ---
-     surface_code surface_label  n_games     mae  mae_home  mae_away
-                4    matrixturf        1 0.82439  0.247568  1.401213
+    --- by_surface.parquet — cells the game contributes to for (rung2_linear__flat__season_holdout, val) — 1/6 rows ---
+     surface_code surface_label  n_games      mae  mae_home  mae_away
+                3         grass        2 4.509819  4.697774  4.321864
     
-    --- by_roof.parquet — cells the game contributes to for (rung2_linear__flat__s1, val) — 1/4 rows ---
-     roof_code                roof_label  n_games     mae  mae_home  mae_away
-             2 retractable roof (closed)        1 0.82439  0.247568  1.401213
+    --- by_roof.parquet — cells the game contributes to for (rung2_linear__flat__season_holdout, val) — 1/4 rows ---
+     roof_code roof_label  n_games      mae  mae_home  mae_away
+             1   outdoors        3 5.465963  5.346752  5.585175
     
 

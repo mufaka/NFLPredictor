@@ -1,5 +1,7 @@
 # NFL Predictor — Project Idea
 
+> **Status note.** This is the original idea document. The project has since been built out (Phases 1–6) and migrated from a single 2024 season to six seasons (2020–2025). Where this doc and the per-phase specs or `Docs/Plan-MultiYear-Migration.md` disagree, **the specs and the migration plan are the source of truth** — in particular, the week-based `S1`/`S3` split strategies described below were replaced by season-holdout splitting (`season_holdout` / `loso_cv`), and "Phase 7: 2025 test" is now subsumed: 2025 is the held-out test season of the multi-year dataset.
+
 ## Overview
 
 This is the umbrella idea document for the NFL Predictor project — a learning exercise in training a real-world model end-to-end with deliberate best practices for disparate data. It supersedes `Docs/Overview.md`.
