@@ -1,8 +1,8 @@
 {
   "build_timestamp_utc": "fixture",
   "git_commit": "fixture-phase2",
-  "normalization_version": "v1",
+  "normalization_version": "v2",
   "output_sha256": {
-    "Data/processed/features_flat_2024.parquet": "0b620fe2f2ffe37c72d84818f63e4b6c7b5ca585c827c76d5140c11687fda15f"
+    "Data/processed/features_flat_all.parquet": "d3c28b05d5f96b8fa444586bdfd85b4989d4a9d7cb66fb77b968930a02f7f60f"
   }
 }

@@ -1,30 +1,27 @@
-"""Regenerate the tiny Phase 3 integration-test fixture.
+"""Regenerate the tiny Phase 3 integration-test fixture (multi-season).
 
 Run from the repo root with the venv active:
 
     python -m tests.fixtures.splits._regenerate
 
-The script slices the real Phase 2 ``features_flat_2024.parquet`` to a
-small subset — two games per NFL week (36 games total) — keeping only
-the columns Phase 3 reads (``GameId``, ``week``). The slice is sampled
-deterministically by lexicographic GameId order so the regeneration is
-itself reproducible. A stub ``feature_manifest.json`` is generated
-whose ``output_sha256`` entry for the slice equals its actual SHA so
-``verify_phase2_outputs`` accepts the fixture. The shipped
-``splits_config.yaml`` is mirrored verbatim, and the split build runs
-into ``expected/`` with the manifest timestamp blanked.
-
-The fixture is pinned to the Phase 2 parquet bytes — bump it whenever
-Phase 2 outputs change.
+The script slices the real Phase 2 ``features_flat_all.parquet`` to a
+small subset — a few games per season, all six seasons — keeping only
+the columns Phase 3 reads (``GameId``, ``season``). The slice is sampled
+deterministically by lexicographic GameId order. A stub
+``feature_manifest.json`` is generated whose ``output_sha256`` entry for
+the slice equals its actual SHA so ``verify_phase2_outputs`` accepts the
+fixture. A fixture ``splits_config.yaml`` enabling **both** strategies is
+written so the snapshot covers season_holdout and loso_cv, and the split
+build runs into ``expected/`` with the manifest timestamp blanked.
 
 Outputs:
     tests/fixtures/splits/raw_phase2/
-        features_flat_2024.parquet
+        features_flat_all.parquet
         feature_manifest.json
     tests/fixtures/splits/raw/
         splits_config.yaml
     tests/fixtures/splits/expected/
-        splits_2024.json
+        splits_all.json
         splits_manifest.json (timestamp + git_commit blanked)
 """
 
@@ -36,6 +33,7 @@ import pathlib
 import shutil
 import sys
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from nflpredictor.splits.pipeline import (
@@ -50,13 +48,22 @@ from nflpredictor.splits.pipeline import (
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 REAL_PROCESSED = REPO_ROOT / "Data" / "processed"
-REAL_RAW = REPO_ROOT / "Data" / "raw"
 FIXTURE_DIR = pathlib.Path(__file__).parent
 RAW_PHASE2 = FIXTURE_DIR / "raw_phase2"
 RAW_SPLITS = FIXTURE_DIR / "raw"
 EXPECTED = FIXTURE_DIR / "expected"
 
-GAMES_PER_WEEK = 2  # 2 × 18 weeks = 36 games — small enough to check in.
+GAMES_PER_SEASON = 4  # 4 × 6 seasons = 24 games — small enough to check in.
+
+FIXTURE_CONFIG = """\
+splits_version: "v2"
+
+strategies: [season_holdout, loso_cv]
+
+train_seasons: [2020, 2021, 2022, 2023]
+val_season:  2024
+test_season: 2025
+"""
 
 
 def _sha256(path: pathlib.Path) -> str:
@@ -64,42 +71,34 @@ def _sha256(path: pathlib.Path) -> str:
 
 
 def build_fixture() -> None:
-    # 1. Read the real Phase 2 parquet — only the columns Phase 3 reads.
     src_path = REAL_PROCESSED / PHASE2_FEATURES_FLAT_BASENAME
-    df = pq.read_table(src_path, columns=["GameId", "week"]).to_pandas()
+    df = pq.read_table(src_path, columns=["GameId", "season"]).to_pandas()
 
-    # 2. Pick the first GAMES_PER_WEEK GameIds (lex order) per week.
-    df_sorted = df.sort_values(["week", "GameId"], kind="stable")
+    df_sorted = df.sort_values(["season", "GameId"], kind="stable")
     slice_df = (
-        df_sorted.groupby("week", group_keys=False)
-        .head(GAMES_PER_WEEK)
+        df_sorted.groupby("season", group_keys=False)
+        .head(GAMES_PER_SEASON)
         .reset_index(drop=True)
     )
 
-    expected_count = GAMES_PER_WEEK * 18
+    expected_count = GAMES_PER_SEASON * 6
     if len(slice_df) != expected_count:
         raise SystemExit(
-            f"expected {expected_count} games in slice; got {len(slice_df)} "
-            f"(missing coverage for some weeks?)"
+            f"expected {expected_count} games in slice; got {len(slice_df)}"
         )
 
-    # 3. Wipe + repopulate fixture dirs.
     for d in (RAW_PHASE2, RAW_SPLITS, EXPECTED):
         if d.exists():
             shutil.rmtree(d)
         d.mkdir(parents=True)
 
-    # 4. Write the sliced parquet.
-    import pyarrow as pa
-
     slice_path = RAW_PHASE2 / PHASE2_FEATURES_FLAT_BASENAME
     pq.write_table(pa.Table.from_pandas(slice_df, preserve_index=False), slice_path)
 
-    # 5. Stub feature_manifest.json with the slice's SHA so the hash gate accepts it.
     fake_phase2_manifest = {
         "build_timestamp_utc": "fixture",
         "git_commit": "fixture-phase2",
-        "normalization_version": "v1",
+        "normalization_version": "v2",
         "output_sha256": {
             f"Data/processed/{PHASE2_FEATURES_FLAT_BASENAME}": _sha256(slice_path),
         },
@@ -109,12 +108,8 @@ def build_fixture() -> None:
         json.dump(fake_phase2_manifest, f, sort_keys=True, indent=2)
         f.write("\n")
 
-    # 6. Mirror the shipped splits_config.yaml verbatim.
-    shutil.copy2(
-        REAL_RAW / SPLITS_CONFIG_BASENAME, RAW_SPLITS / SPLITS_CONFIG_BASENAME
-    )
+    (RAW_SPLITS / SPLITS_CONFIG_BASENAME).write_text(FIXTURE_CONFIG, encoding="utf-8")
 
-    # 7. Run the split build into a working dir; copy outputs to expected/.
     working = FIXTURE_DIR / "_working"
     if working.exists():
         shutil.rmtree(working)

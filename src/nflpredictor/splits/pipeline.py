@@ -12,22 +12,22 @@ import pyarrow.parquet as pq
 
 from nflpredictor.databuild.manifest import compute_sha256
 
-from .config import MAX_WEEK, MIN_WEEK, load_splits_config
+from .config import MAX_SEASON, MIN_SEASON, SplitsConfig, load_splits_config
+from .loso_cv import build_loso_cv
 from .manifest import (
     build_splits_manifest,
     build_strategy_summaries,
     write_splits_manifest,
 )
 from .outputs import build_splits_artifact, write_splits_artifact
-from .s1 import assign_s1
-from .s3 import build_s3
+from .season_holdout import assign_season_holdout
 
 
-PHASE2_FEATURES_FLAT_BASENAME = "features_flat_2024.parquet"
+PHASE2_FEATURES_FLAT_BASENAME = "features_flat_all.parquet"
 PHASE2_MANIFEST_BASENAME = "feature_manifest.json"
 
 SPLITS_CONFIG_BASENAME = "splits_config.yaml"
-SPLITS_ARTIFACT_BASENAME = "splits_2024.json"
+SPLITS_ARTIFACT_BASENAME = "splits_all.json"
 SPLITS_MANIFEST_BASENAME = "splits_manifest.json"
 
 
@@ -78,47 +78,43 @@ def verify_phase2_outputs(processed_dir: pathlib.Path) -> dict:
 
 
 def load_game_universe(parquet_path: pathlib.Path) -> pd.DataFrame:
-    """Read ``GameId`` and ``week`` columns from the Phase 2 feature matrix (SP-IN-05).
+    """Read ``GameId`` and ``season`` from the Phase 2 feature matrix (SP-IN-05).
 
-    Validates that ``week`` is an integer in ``[1, 18]`` and that ``GameId`` values
-    are unique. Returns a 2-column DataFrame ``[GameId, week]``.
+    Validates that ``season`` is an integer in ``[2020, 2025]`` and that
+    ``GameId`` values are unique. Returns a 2-column DataFrame ``[GameId, season]``.
     """
     schema_names = pq.ParquetFile(parquet_path).schema_arrow.names
-    if "week" not in schema_names:
-        raise ValueError(
-            f"Phase 2 feature matrix {parquet_path} is missing required 'week' column"
-        )
-    if "GameId" not in schema_names:
-        raise ValueError(
-            f"Phase 2 feature matrix {parquet_path} is missing required 'GameId' column"
-        )
+    for col in ("GameId", "season"):
+        if col not in schema_names:
+            raise ValueError(
+                f"Phase 2 feature matrix {parquet_path} is missing "
+                f"required {col!r} column"
+            )
 
-    table = pq.read_table(parquet_path, columns=["GameId", "week"])
-    df = table.to_pandas()
+    df = pq.read_table(parquet_path, columns=["GameId", "season"]).to_pandas()
 
-    if df["week"].isna().any():
-        raise ValueError("Phase 2 'week' column contains null values")
+    if df["season"].isna().any():
+        raise ValueError("Phase 2 'season' column contains null values")
 
-    week_series = df["week"]
-    if not pd.api.types.is_integer_dtype(week_series):
-        # Allow numeric-but-fractional rejection alongside non-integer values.
+    season_series = df["season"]
+    if not pd.api.types.is_integer_dtype(season_series):
         try:
-            coerced = week_series.astype(int)
+            coerced = season_series.astype(int)
         except (ValueError, TypeError) as exc:
             raise ValueError(
-                f"Phase 2 'week' column must be integer; got dtype {week_series.dtype}"
+                f"Phase 2 'season' column must be integer; "
+                f"got dtype {season_series.dtype}"
             ) from exc
-        if not (coerced == week_series).all():
-            raise ValueError(
-                "Phase 2 'week' column contains non-integer values"
-            )
-        df = df.assign(week=coerced)
+        if not (coerced == season_series).all():
+            raise ValueError("Phase 2 'season' column contains non-integer values")
+        df = df.assign(season=coerced)
 
-    out_of_range = df[(df["week"] < MIN_WEEK) | (df["week"] > MAX_WEEK)]
+    out_of_range = df[(df["season"] < MIN_SEASON) | (df["season"] > MAX_SEASON)]
     if not out_of_range.empty:
-        bad = sorted(set(out_of_range["week"].tolist()))
+        bad = sorted(set(out_of_range["season"].tolist()))
         raise ValueError(
-            f"Phase 2 'week' column contains values outside [{MIN_WEEK}, {MAX_WEEK}]: {bad}"
+            f"Phase 2 'season' column has values outside "
+            f"[{MIN_SEASON}, {MAX_SEASON}]: {bad}"
         )
 
     duplicates = df["GameId"][df["GameId"].duplicated()].unique().tolist()
@@ -130,25 +126,40 @@ def load_game_universe(parquet_path: pathlib.Path) -> pd.DataFrame:
     return df
 
 
+def _assert_config_covers_universe(
+    universe: pd.DataFrame, config: SplitsConfig
+) -> None:
+    """SP-CFG-04: the config's role assignment must cover exactly the data's seasons."""
+    data_seasons = set(int(s) for s in universe["season"].unique())
+    config_seasons = {*config.train_seasons, config.val_season, config.test_season}
+    if data_seasons != config_seasons:
+        raise ValueError(
+            "splits_config season assignment does not match the seasons present "
+            f"in the feature matrix: config={sorted(config_seasons)}, "
+            f"data={sorted(data_seasons)} (SP-CFG-04)"
+        )
+
+
 def _log_strategy_counts(
-    s1: dict[str, list[str]] | None,
-    s3: dict[str, object] | None,
+    season_holdout: dict[str, list[str]] | None,
+    loso_cv: dict[str, object] | None,
 ) -> None:
     """Emit per-strategy counts to stderr (SP-NF-06)."""
-    if s1 is not None:
+    if season_holdout is not None:
         print(
-            f"S1: train={len(s1['train'])} val={len(s1['val'])} test={len(s1['test'])}",
+            f"season_holdout: train={len(season_holdout['train'])} "
+            f"val={len(season_holdout['val'])} test={len(season_holdout['test'])}",
             file=sys.stderr,
         )
-    if s3 is not None:
-        folds = s3["folds"]  # list[Fold]
+    if loso_cv is not None:
+        folds = loso_cv["folds"]  # list[Fold]
         print(
-            f"S3: fold_count={len(folds)} test={len(s3['test'])}",
+            f"loso_cv: fold_count={len(folds)} test={len(loso_cv['test'])}",
             file=sys.stderr,
         )
         for fold in folds:  # type: ignore[assignment]
             print(
-                f"  fold {fold.fold_index}: k={fold.k} "
+                f"  fold {fold.fold_index}: val_season={fold.val_season} "
                 f"train={len(fold.train)} val={len(fold.val)}",
                 file=sys.stderr,
             )
@@ -171,33 +182,40 @@ def run_split_build(
     # 2. Verify Phase 2 outputs (SP-IN-04).
     phase2_manifest = verify_phase2_outputs(processed_dir)
 
-    # 3. Load the (GameId -> week) universe.
+    # 3. Load the (GameId -> season) universe and confirm coverage (SP-CFG-04).
     parquet_path = processed_dir / PHASE2_FEATURES_FLAT_BASENAME
     universe = load_game_universe(parquet_path)
+    _assert_config_covers_universe(universe, config)
 
-    # 4. S1.
-    s1 = assign_s1(universe, config) if "S1" in config.strategies else None
+    # 4. season_holdout.
+    season_holdout = (
+        assign_season_holdout(universe, config)
+        if "season_holdout" in config.strategies
+        else None
+    )
 
-    # 5. S3 — reuse S1's test list when available; otherwise derive it.
-    s3 = None
-    if "S3" in config.strategies:
-        if s1 is not None:
-            s3_test = s1["test"]
+    # 5. loso_cv — reuse season_holdout's test list when available.
+    loso_cv = None
+    if "loso_cv" in config.strategies:
+        if season_holdout is not None:
+            test_list = season_holdout["test"]
         else:
-            test_lo, test_hi = config.test_weeks
-            mask = (universe["week"] >= test_lo) & (universe["week"] <= test_hi)
-            s3_test = sorted(universe.loc[mask, "GameId"].astype(str).tolist())
-        s3 = build_s3(universe, config, s3_test)
+            test_list = sorted(
+                universe.loc[
+                    universe["season"] == config.test_season, "GameId"
+                ].astype(str).tolist()
+            )
+        loso_cv = build_loso_cv(universe, config, test_list)
 
-    # 6. Write splits_2024.json.
-    artifact = build_splits_artifact(config, s1, s3)
+    # 6. Write splits_all.json.
+    artifact = build_splits_artifact(config, season_holdout, loso_cv)
     artifact_path = processed_dir / SPLITS_ARTIFACT_BASENAME
     write_splits_artifact(artifact, artifact_path)
 
-    _log_strategy_counts(s1, s3)
+    _log_strategy_counts(season_holdout, loso_cv)
 
     # 7. Write manifest LAST so output SHAs include the artifact (SP-MAN-05).
-    summaries = build_strategy_summaries(s1, s3)
+    summaries = build_strategy_summaries(season_holdout, loso_cv)
     splits_config_sha256 = compute_sha256(config_path)  # raw bytes (SP-MAN-06)
     phase2_source_sha256 = {
         f"Data/processed/{PHASE2_FEATURES_FLAT_BASENAME}": compute_sha256(parquet_path),

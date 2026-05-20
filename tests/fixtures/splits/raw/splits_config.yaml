@@ -1,10 +1,7 @@
-splits_version: "v1"
+splits_version: "v2"
 
-strategies: [S1, S3]
+strategies: [season_holdout, loso_cv]
 
-train_weeks: [1, 12]
-val_weeks:   [13, 15]
-test_weeks:  [16, 18]
-
-s3:
-  k_start: 6
+train_seasons: [2020, 2021, 2022, 2023]
+val_season:  2024
+test_season: 2025

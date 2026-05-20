@@ -4,36 +4,37 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
 
-ALLOWED_STRATEGIES: frozenset[str] = frozenset({"S1", "S3"})
+ALLOWED_STRATEGIES: frozenset[str] = frozenset({"season_holdout", "loso_cv"})
 
 _TOP_LEVEL_KEYS: frozenset[str] = frozenset({
     "splits_version",
     "strategies",
-    "train_weeks",
-    "val_weeks",
-    "test_weeks",
-    "s3",
+    "train_seasons",
+    "val_season",
+    "test_season",
 })
 
-_S3_KEYS: frozenset[str] = frozenset({"k_start"})
-
-MIN_WEEK = 1
-MAX_WEEK = 18
+MIN_SEASON = 2020
+MAX_SEASON = 2025
 
 
 @dataclass(frozen=True)
 class SplitsConfig:
     splits_version: str
     strategies: tuple[str, ...]
-    train_weeks: tuple[int, int]
-    val_weeks: tuple[int, int]
-    test_weeks: tuple[int, int]
-    s3_k_start: Optional[int]
+    train_seasons: tuple[int, ...]
+    val_season: int
+    test_season: int
+
+    @property
+    def rotation_pool(self) -> tuple[int, ...]:
+        """The loso_cv rotation pool — train seasons plus the val season, sorted."""
+        return tuple(sorted((*self.train_seasons, self.val_season)))
 
 
 class SplitsConfigError(ValueError):
@@ -41,7 +42,7 @@ class SplitsConfigError(ValueError):
 
 
 def load_splits_config(path: pathlib.Path) -> SplitsConfig:
-    """Read, parse, and validate splits_config.yaml (SP-IN-02, SP-IN-06, SP-CFG-01..06)."""
+    """Read, parse, and validate splits_config.yaml (SP-IN-02, SP-IN-06, SP-CFG-01..07)."""
     if not path.exists():
         raise FileNotFoundError(f"splits_config.yaml not found at {path}")
     with path.open("r", encoding="utf-8") as f:
@@ -60,13 +61,9 @@ def _parse(raw: dict[str, Any]) -> SplitsConfig:
         raise SplitsConfigError(
             f"unknown top-level keys in splits_config.yaml: {sorted(unknown)}"
         )
-
-    required = {"splits_version", "strategies", "train_weeks", "val_weeks", "test_weeks"}
-    missing = required - set(raw.keys())
+    missing = _TOP_LEVEL_KEYS - set(raw.keys())
     if missing:
-        raise SplitsConfigError(
-            f"missing required top-level keys: {sorted(missing)}"
-        )
+        raise SplitsConfigError(f"missing required top-level keys: {sorted(missing)}")
 
     splits_version = raw["splits_version"]
     if not isinstance(splits_version, str) or not splits_version:
@@ -75,29 +72,26 @@ def _parse(raw: dict[str, Any]) -> SplitsConfig:
         )
 
     strategies = _parse_strategies(raw["strategies"])
-    train_weeks = _parse_week_range("train_weeks", raw["train_weeks"])
-    val_weeks = _parse_week_range("val_weeks", raw["val_weeks"])
-    test_weeks = _parse_week_range("test_weeks", raw["test_weeks"])
+    train_seasons = _parse_train_seasons(raw["train_seasons"])
+    val_season = _parse_season("val_season", raw["val_season"])
+    test_season = _parse_season("test_season", raw["test_season"])
 
-    _validate_range_layout(train_weeks, val_weeks, test_weeks)
+    _validate_role_assignment(train_seasons, val_season, test_season)
 
-    s3_k_start: Optional[int] = None
-    if "S3" in strategies:
-        s3_k_start = _parse_s3_block(raw.get("s3"), val_weeks)
-    elif "s3" in raw and raw["s3"] is not None:
-        # An s3 block is allowed-but-meaningless when S3 isn't enabled; reject so
-        # the config can't quietly drift from the strategies list.
-        raise SplitsConfigError(
-            "s3 block present but 'S3' is not in strategies"
-        )
+    if "loso_cv" in strategies:
+        pool = sorted({*train_seasons, val_season})
+        if len(pool) < 2:
+            raise SplitsConfigError(
+                "loso_cv needs a rotation pool of at least two seasons "
+                f"(train_seasons ∪ {{val_season}}); got {pool}"
+            )
 
     return SplitsConfig(
         splits_version=splits_version,
         strategies=strategies,
-        train_weeks=train_weeks,
-        val_weeks=val_weeks,
-        test_weeks=test_weeks,
-        s3_k_start=s3_k_start,
+        train_seasons=train_seasons,
+        val_season=val_season,
+        test_season=test_season,
     )
 
 
@@ -118,79 +112,54 @@ def _parse_strategies(value: Any) -> tuple[str, ...]:
                 f"{sorted(ALLOWED_STRATEGIES)}"
             )
         if entry in seen:
-            raise SplitsConfigError(
-                f"duplicate entry in strategies: {entry!r}"
-            )
+            raise SplitsConfigError(f"duplicate entry in strategies: {entry!r}")
         seen.add(entry)
     return tuple(value)
 
 
-def _parse_week_range(field: str, value: Any) -> tuple[int, int]:
-    if (
-        not isinstance(value, list)
-        or len(value) != 2
-        or any(isinstance(v, bool) for v in value)
-        or not all(isinstance(v, int) for v in value)
-    ):
+def _parse_season(field: str, value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise SplitsConfigError(f"{field} must be an integer season; got {value!r}")
+    if not (MIN_SEASON <= value <= MAX_SEASON):
         raise SplitsConfigError(
-            f"{field} must be a [start, end] pair of integers; got {value!r}"
+            f"{field} must be in [{MIN_SEASON}, {MAX_SEASON}]; got {value}"
         )
-    start, end = value
-    if not (MIN_WEEK <= start <= end <= MAX_WEEK):
-        raise SplitsConfigError(
-            f"{field} must satisfy {MIN_WEEK} <= start <= end <= {MAX_WEEK}; "
-            f"got [{start}, {end}]"
-        )
-    return (start, end)
+    return value
 
 
-def _validate_range_layout(
-    train: tuple[int, int],
-    val: tuple[int, int],
-    test: tuple[int, int],
+def _parse_train_seasons(value: Any) -> tuple[int, ...]:
+    if not isinstance(value, list) or not value:
+        raise SplitsConfigError("train_seasons must be a non-empty list of seasons")
+    seasons: list[int] = []
+    for entry in value:
+        if isinstance(entry, bool) or not isinstance(entry, int):
+            raise SplitsConfigError(
+                f"train_seasons entries must be integers; got {entry!r}"
+            )
+        if not (MIN_SEASON <= entry <= MAX_SEASON):
+            raise SplitsConfigError(
+                f"train_seasons entry {entry} must be in "
+                f"[{MIN_SEASON}, {MAX_SEASON}]"
+            )
+        if entry in seasons:
+            raise SplitsConfigError(f"duplicate entry in train_seasons: {entry}")
+        seasons.append(entry)
+    return tuple(sorted(seasons))
+
+
+def _validate_role_assignment(
+    train_seasons: tuple[int, ...], val_season: int, test_season: int
 ) -> None:
-    if not (train[1] < val[0]):
+    """SP-CFG-04 (intra-config part): the three role assignments are disjoint."""
+    if val_season in train_seasons:
         raise SplitsConfigError(
-            f"train_weeks[1] ({train[1]}) must be strictly less than "
-            f"val_weeks[0] ({val[0]})"
+            f"val_season ({val_season}) must not also appear in train_seasons"
         )
-    if not (val[1] < test[0]):
+    if test_season in train_seasons:
         raise SplitsConfigError(
-            f"val_weeks[1] ({val[1]}) must be strictly less than "
-            f"test_weeks[0] ({test[0]})"
+            f"test_season ({test_season}) must not also appear in train_seasons"
         )
-    if val[0] != train[1] + 1:
+    if val_season == test_season:
         raise SplitsConfigError(
-            f"train_weeks and val_weeks must be contiguous: "
-            f"train_weeks ends at {train[1]}, val_weeks starts at {val[0]}"
+            f"val_season and test_season must differ; both are {val_season}"
         )
-    if test[0] != val[1] + 1:
-        raise SplitsConfigError(
-            f"val_weeks and test_weeks must be contiguous: "
-            f"val_weeks ends at {val[1]}, test_weeks starts at {test[0]}"
-        )
-
-
-def _parse_s3_block(value: Any, val_weeks: tuple[int, int]) -> int:
-    if not isinstance(value, dict):
-        raise SplitsConfigError(
-            "s3 block is required when 'S3' is in strategies"
-        )
-    unknown = set(value.keys()) - _S3_KEYS
-    if unknown:
-        raise SplitsConfigError(
-            f"unknown keys in s3 block: {sorted(unknown)}"
-        )
-    if "k_start" not in value:
-        raise SplitsConfigError("s3.k_start is required when 'S3' is in strategies")
-    k_start = value["k_start"]
-    if isinstance(k_start, bool) or not isinstance(k_start, int):
-        raise SplitsConfigError(
-            f"s3.k_start must be an integer; got {k_start!r}"
-        )
-    if not (1 <= k_start < val_weeks[1]):
-        raise SplitsConfigError(
-            f"s3.k_start must satisfy 1 <= k_start < val_weeks[1] "
-            f"({val_weeks[1]}); got {k_start}"
-        )
-    return k_start

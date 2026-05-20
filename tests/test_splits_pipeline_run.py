@@ -1,7 +1,7 @@
 """Pinned-identity test against the real Phase 2 outputs (SP-TEST-06).
 
-Also exercises SP-TEST-05's determinism property on the real 272-game
-dataset (companion to ``test_splits_determinism.py``'s fixture-based test).
+Also exercises SP-TEST-05's determinism property on the real dataset
+(companion to ``test_splits_determinism.py``'s fixture-based test).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from nflpredictor.splits.pipeline import (
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REAL_RAW = REPO_ROOT / "Data" / "raw"
 REAL_PROCESSED = REPO_ROOT / "Data" / "processed"
+N_GAMES = 1622
 
 
 def _seed_real_inputs(processed: pathlib.Path, raw: pathlib.Path) -> None:
@@ -46,45 +47,48 @@ def _run(tmp_path: pathlib.Path) -> pathlib.Path:
     return processed
 
 
-def test_real_data_s1_partition_sizes(tmp_path):
+def test_real_data_season_holdout_partition_sizes(tmp_path):
     processed = _run(tmp_path)
     artifact = json.loads((processed / SPLITS_ARTIFACT_BASENAME).read_text())
 
-    s1 = artifact["S1"]
-    train, val, test = s1["train"], s1["val"], s1["test"]
+    sh = artifact["season_holdout"]
+    train, val, test = sh["train"], sh["val"], sh["test"]
 
-    # Pinned counts for the v1 default boundaries on the 2024 season.
-    assert len(train) == 179
-    assert len(val) == 45
-    assert len(test) == 48
-    assert len(train) + len(val) + len(test) == 272
+    # Pinned counts for the v2 default assignment (train 2020-2023 /
+    # val 2024 / test 2025) on the real combined data.
+    assert len(train) == 1077
+    assert len(val) == 272
+    assert len(test) == 273
+    assert len(train) + len(val) + len(test) == N_GAMES
 
-    # The three role lists partition the universe.
     train_set, val_set, test_set = set(train), set(val), set(test)
     assert train_set.isdisjoint(val_set)
     assert train_set.isdisjoint(test_set)
     assert val_set.isdisjoint(test_set)
-    assert len(train_set | val_set | test_set) == 272
+    assert len(train_set | val_set | test_set) == N_GAMES
 
 
-def test_real_data_s3_structure(tmp_path):
+def _season_of(game_id: str) -> int:
+    """NFL season of a GameId — month >= 8 maps to the calendar year, else year-1."""
+    year, month = int(game_id[:4]), int(game_id[4:6])
+    return year if month >= 8 else year - 1
+
+
+def test_real_data_test_season_never_pooled(tmp_path):
+    """The 2025 test season must not leak into train or val (SP-TEST-06)."""
     processed = _run(tmp_path)
     artifact = json.loads((processed / SPLITS_ARTIFACT_BASENAME).read_text())
-    s1 = artifact["S1"]
-    s3 = artifact["S3"]
-
-    assert s3["test"] == s1["test"]
-    assert len(s3["folds"]) == 9
-    assert [f["k"] for f in s3["folds"]] == list(range(6, 15))
-    assert [f["fold_index"] for f in s3["folds"]] == list(range(9))
+    sh = artifact["season_holdout"]
+    for gid in sh["train"] + sh["val"]:
+        assert _season_of(gid) != 2025, (
+            f"{gid} from the test season leaked into train/val"
+        )
 
 
 def test_real_data_byte_identical_rerun(tmp_path):
     """Two real-data runs against identical inputs → byte-identical outputs."""
-    processed_a = tmp_path / "a"
-    raw_a = tmp_path / "raw_a"
-    processed_b = tmp_path / "b"
-    raw_b = tmp_path / "raw_b"
+    processed_a, raw_a = tmp_path / "a", tmp_path / "raw_a"
+    processed_b, raw_b = tmp_path / "b", tmp_path / "raw_b"
     _seed_real_inputs(processed_a, raw_a)
     _seed_real_inputs(processed_b, raw_b)
 
@@ -95,7 +99,6 @@ def test_real_data_byte_identical_rerun(tmp_path):
         _sha256(processed_a / SPLITS_ARTIFACT_BASENAME)
         == _sha256(processed_b / SPLITS_ARTIFACT_BASENAME)
     )
-
     m1 = json.loads((processed_a / SPLITS_MANIFEST_BASENAME).read_text())
     m2 = json.loads((processed_b / SPLITS_MANIFEST_BASENAME).read_text())
     m1.pop("build_timestamp_utc")
@@ -110,6 +113,7 @@ def test_real_data_manifest_has_required_keys(tmp_path):
         "build_timestamp_utc",
         "splits_version",
         "splits_config_sha256",
+        "season_assignment",
         "phase2_source_sha256",
         "output_sha256",
         "git_commit",
@@ -117,7 +121,5 @@ def test_real_data_manifest_has_required_keys(tmp_path):
         "strategy_summaries",
     }
     assert expected_keys.issubset(manifest.keys())
-    assert (
-        f"Data/processed/{SPLITS_ARTIFACT_BASENAME}"
-        in manifest["output_sha256"]
-    )
+    assert f"Data/processed/{SPLITS_ARTIFACT_BASENAME}" in manifest["output_sha256"]
+    assert manifest["season_assignment"]["test_season"] == 2025

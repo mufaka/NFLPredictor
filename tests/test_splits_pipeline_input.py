@@ -6,7 +6,6 @@ import json
 import pathlib
 import shutil
 
-import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -22,6 +21,7 @@ from nflpredictor.splits.pipeline import (
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REAL_PROCESSED = REPO_ROOT / "Data" / "processed"
+N_GAMES = 1622
 
 
 def _copy_real_phase2(dst: pathlib.Path) -> pathlib.Path:
@@ -43,8 +43,7 @@ def test_happy_path_against_real_phase2_outputs():
 
 def test_tampered_parquet_fails_fast(tmp_path):
     proc = _copy_real_phase2(tmp_path / "processed")
-    parquet_path = proc / PHASE2_FEATURES_FLAT_BASENAME
-    with parquet_path.open("ab") as f:
+    with (proc / PHASE2_FEATURES_FLAT_BASENAME).open("ab") as f:
         f.write(b"\x00")
     with pytest.raises(Phase2OutputMismatchError, match="hash mismatch"):
         verify_phase2_outputs(proc)
@@ -67,11 +66,9 @@ def test_missing_parquet_fails_fast(tmp_path):
 def test_manifest_missing_output_sha_map_fails_fast(tmp_path):
     proc = _copy_real_phase2(tmp_path / "processed")
     manifest_path = proc / PHASE2_MANIFEST_BASENAME
-    with manifest_path.open("r", encoding="utf-8") as f:
-        manifest = json.load(f)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     del manifest["output_sha256"]
-    with manifest_path.open("w", encoding="utf-8") as f:
-        json.dump(manifest, f)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(Phase2OutputMismatchError, match="missing the 'output_sha256' map"):
         verify_phase2_outputs(proc)
 
@@ -80,44 +77,39 @@ def _write_parquet(path: pathlib.Path, table: pa.Table) -> None:
     pq.write_table(table, path)
 
 
-def test_load_game_universe_rejects_missing_week_column(tmp_path):
+def test_load_game_universe_rejects_missing_season_column(tmp_path):
     parquet = tmp_path / "features.parquet"
     _write_parquet(parquet, pa.table({"GameId": ["a", "b"], "x": [1, 2]}))
-    with pytest.raises(ValueError, match="missing required 'week' column"):
+    with pytest.raises(ValueError, match="missing required 'season' column"):
         load_game_universe(parquet)
 
 
 def test_load_game_universe_rejects_missing_gameid_column(tmp_path):
     parquet = tmp_path / "features.parquet"
-    _write_parquet(parquet, pa.table({"week": [1, 2]}))
+    _write_parquet(parquet, pa.table({"season": [2024, 2025]}))
     with pytest.raises(ValueError, match="missing required 'GameId' column"):
         load_game_universe(parquet)
 
 
-def test_load_game_universe_rejects_out_of_range_week(tmp_path):
+def test_load_game_universe_rejects_out_of_range_season(tmp_path):
     parquet = tmp_path / "features.parquet"
-    _write_parquet(parquet, pa.table({"GameId": ["a", "b"], "week": [1, 19]}))
-    with pytest.raises(ValueError, match=r"outside \[1, 18\]"):
-        load_game_universe(parquet)
-
-
-def test_load_game_universe_rejects_zero_week(tmp_path):
-    parquet = tmp_path / "features.parquet"
-    _write_parquet(parquet, pa.table({"GameId": ["a", "b"], "week": [0, 5]}))
-    with pytest.raises(ValueError, match=r"outside \[1, 18\]"):
+    _write_parquet(parquet, pa.table({"GameId": ["a", "b"], "season": [2024, 2099]}))
+    with pytest.raises(ValueError, match=r"\[2020, 2025\]"):
         load_game_universe(parquet)
 
 
 def test_load_game_universe_rejects_duplicate_gameids(tmp_path):
     parquet = tmp_path / "features.parquet"
-    _write_parquet(parquet, pa.table({"GameId": ["a", "a", "b"], "week": [1, 2, 3]}))
+    _write_parquet(
+        parquet, pa.table({"GameId": ["a", "a", "b"], "season": [2024, 2024, 2025]})
+    )
     with pytest.raises(ValueError, match="duplicates"):
         load_game_universe(parquet)
 
 
 def test_load_game_universe_happy_path_real_data():
     df = load_game_universe(REAL_PROCESSED / PHASE2_FEATURES_FLAT_BASENAME)
-    assert list(df.columns) == ["GameId", "week"]
-    assert len(df) == 272
-    assert df["week"].between(1, 18).all()
+    assert list(df.columns) == ["GameId", "season"]
+    assert len(df) == N_GAMES
+    assert df["season"].between(2020, 2025).all()
     assert df["GameId"].is_unique

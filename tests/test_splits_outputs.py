@@ -1,7 +1,8 @@
 """Sort-order test for every GameId list in the artifact (SP-TEST-08).
 
 Also asserts artifact-level structural invariants that depend on the
-deterministic writer in ``outputs.py``.
+deterministic writer in ``outputs.py``. The fixture config enables both
+strategies, so the artifact carries season_holdout and loso_cv.
 """
 
 from __future__ import annotations
@@ -41,28 +42,28 @@ def test_every_gameid_list_is_sorted(tmp_path):
     artifact = _load_artifact(tmp_path)
 
     for role in ("train", "val", "test"):
-        ids = artifact["S1"][role]
-        assert ids == sorted(ids), f"S1.{role} not sorted"
+        ids = artifact["season_holdout"][role]
+        assert ids == sorted(ids), f"season_holdout.{role} not sorted"
 
-    assert artifact["S3"]["test"] == sorted(artifact["S3"]["test"]), "S3.test not sorted"
+    assert artifact["loso_cv"]["test"] == sorted(artifact["loso_cv"]["test"])
 
-    for fold in artifact["S3"]["folds"]:
+    for fold in artifact["loso_cv"]["folds"]:
         assert fold["train"] == sorted(fold["train"]), (
-            f"S3.folds[{fold['fold_index']}].train not sorted"
+            f"loso_cv.folds[{fold['fold_index']}].train not sorted"
         )
         assert fold["val"] == sorted(fold["val"]), (
-            f"S3.folds[{fold['fold_index']}].val not sorted"
+            f"loso_cv.folds[{fold['fold_index']}].val not sorted"
         )
 
 
 def test_artifact_key_order_is_pinned(tmp_path):
     """Top-level and per-strategy key order matches §4.2."""
     artifact = _load_artifact(tmp_path)
-    assert list(artifact.keys()) == ["splits_version", "S1", "S3"]
-    assert list(artifact["S1"].keys()) == ["train", "val", "test"]
-    assert list(artifact["S3"].keys()) == ["test", "folds"]
-    for fold in artifact["S3"]["folds"]:
-        assert list(fold.keys()) == ["fold_index", "k", "train", "val"]
+    assert list(artifact.keys()) == ["splits_version", "season_holdout", "loso_cv"]
+    assert list(artifact["season_holdout"].keys()) == ["train", "val", "test"]
+    assert list(artifact["loso_cv"].keys()) == ["test", "folds"]
+    for fold in artifact["loso_cv"]["folds"]:
+        assert list(fold.keys()) == ["fold_index", "val_season", "train", "val"]
 
 
 def test_artifact_ends_with_trailing_newline(tmp_path):

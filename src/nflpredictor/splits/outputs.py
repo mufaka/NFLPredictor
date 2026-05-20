@@ -8,41 +8,43 @@ from collections import OrderedDict
 from typing import Any
 
 from .config import SplitsConfig
-from .s3 import Fold
+from .loso_cv import Fold
 
 
 def build_splits_artifact(
     config: SplitsConfig,
-    s1: dict[str, list[str]] | None,
-    s3: dict[str, Any] | None,
+    season_holdout: dict[str, list[str]] | None,
+    loso_cv: dict[str, Any] | None,
 ) -> "OrderedDict[str, Any]":
     """Construct the splits artifact dict with pinned key order (§4.2).
 
     Top level: ``splits_version`` then each strategy in declaration order.
-    S1: ``train``, ``val``, ``test``. S3: ``test`` then ``folds``.
-    Per-fold: ``fold_index``, ``k``, ``train``, ``val``.
+    season_holdout: ``train``, ``val``, ``test``. loso_cv: ``test`` then
+    ``folds``. Per-fold: ``fold_index``, ``val_season``, ``train``, ``val``.
     """
     artifact: "OrderedDict[str, Any]" = OrderedDict()
     artifact["splits_version"] = config.splits_version
 
     for strategy in config.strategies:
-        if strategy == "S1":
-            if s1 is None:
-                raise ValueError("S1 strategy enabled but no S1 partition supplied")
-            artifact["S1"] = OrderedDict(
+        if strategy == "season_holdout":
+            if season_holdout is None:
+                raise ValueError(
+                    "season_holdout strategy enabled but no partition supplied"
+                )
+            artifact["season_holdout"] = OrderedDict(
                 [
-                    ("train", list(s1["train"])),
-                    ("val", list(s1["val"])),
-                    ("test", list(s1["test"])),
+                    ("train", list(season_holdout["train"])),
+                    ("val", list(season_holdout["val"])),
+                    ("test", list(season_holdout["test"])),
                 ]
             )
-        elif strategy == "S3":
-            if s3 is None:
-                raise ValueError("S3 strategy enabled but no S3 folds supplied")
-            folds_serialised = [_serialise_fold(f) for f in s3["folds"]]
-            artifact["S3"] = OrderedDict(
+        elif strategy == "loso_cv":
+            if loso_cv is None:
+                raise ValueError("loso_cv strategy enabled but no folds supplied")
+            folds_serialised = [_serialise_fold(f) for f in loso_cv["folds"]]
+            artifact["loso_cv"] = OrderedDict(
                 [
-                    ("test", list(s3["test"])),
+                    ("test", list(loso_cv["test"])),
                     ("folds", folds_serialised),
                 ]
             )
@@ -56,7 +58,7 @@ def _serialise_fold(fold: Fold) -> "OrderedDict[str, Any]":
     return OrderedDict(
         [
             ("fold_index", fold.fold_index),
-            ("k", fold.k),
+            ("val_season", fold.val_season),
             ("train", list(fold.train)),
             ("val", list(fold.val)),
         ]

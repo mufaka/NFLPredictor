@@ -14,7 +14,7 @@ from nflpredictor.databuild.manifest import (
 )
 
 from .config import SplitsConfig
-from .s3 import Fold
+from .loso_cv import Fold
 
 
 def utc_timestamp(now: Optional[_dt.datetime] = None) -> str:
@@ -25,26 +25,26 @@ def utc_timestamp(now: Optional[_dt.datetime] = None) -> str:
 
 
 def build_strategy_summaries(
-    s1: dict[str, list[str]] | None,
-    s3: dict[str, Any] | None,
+    season_holdout: dict[str, list[str]] | None,
+    loso_cv: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Per-strategy summary block for the manifest (SP-MAN-02)."""
     summaries: dict[str, Any] = {}
-    if s1 is not None:
-        summaries["S1"] = {
-            "train_n": len(s1["train"]),
-            "val_n": len(s1["val"]),
-            "test_n": len(s1["test"]),
+    if season_holdout is not None:
+        summaries["season_holdout"] = {
+            "train_n": len(season_holdout["train"]),
+            "val_n": len(season_holdout["val"]),
+            "test_n": len(season_holdout["test"]),
         }
-    if s3 is not None:
-        folds: list[Fold] = list(s3["folds"])
-        summaries["S3"] = {
-            "test_n": len(s3["test"]),
+    if loso_cv is not None:
+        folds: list[Fold] = list(loso_cv["folds"])
+        summaries["loso_cv"] = {
+            "test_n": len(loso_cv["test"]),
             "fold_count": len(folds),
             "folds": [
                 {
                     "fold_index": f.fold_index,
-                    "k": f.k,
+                    "val_season": f.val_season,
                     "train_n": len(f.train),
                     "val_n": len(f.val),
                 }
@@ -70,6 +70,11 @@ def build_splits_manifest(
         "build_timestamp_utc": utc_timestamp(now),
         "splits_version": config.splits_version,
         "splits_config_sha256": splits_config_sha256,
+        "season_assignment": {
+            "train_seasons": list(config.train_seasons),
+            "val_season": config.val_season,
+            "test_season": config.test_season,
+        },
         "phase2_source_sha256": dict(sorted(phase2_source_sha256.items())),
         "output_sha256": dict(sorted(output_sha256.items())),
         "git_commit": try_get_git_commit(repo_dir),
