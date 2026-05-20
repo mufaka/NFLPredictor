@@ -161,7 +161,8 @@ The build is expected to be executable from the repository root via a single com
 | DB-FILL-02 | The build shall fill null values in categorical columns (including `archetype` and `runningstyle`) on `matched=0` rows with the mode of that column over `matched=1` rows of the same season. If multiple modes exist, the build shall choose the lexicographically smallest. |
 | DB-FILL-03 | The `matched` column itself shall never be filled. Its values are exactly `1` for raw-Madden rows and `0` for build-appended rows. The `season` column is never filled (it is set explicitly per `DB-UNM-01`). |
 | DB-FILL-04 | Columns that are null in a raw Madden source on `matched=1` rows shall remain null in the processed file. Only nulls on `matched=0` rows are filled. |
-| DB-FILL-05 | The build shall fill all remaining build-relevant columns derived from raw data (`age`, `birthdate`, `yearspro`, `jerseynumber`) on `matched=0` rows using the same per-season mean (numeric) or mode (categorical) rule defined above. The intent is that no `matched=0` row contains a null value after the null-fill step. |
+| DB-FILL-05 | The build shall fill all remaining build-relevant columns derived from raw data (`age`, `birthdate`, `yearspro`, `jerseynumber`) on `matched=0` rows using the same per-season mean (numeric) or mode (categorical) rule defined above. |
+| DB-FILL-06 | The new Madden source leaves some columns entirely unpopulated in some seasons (e.g. `midrouterunning` in five of six seasons; `birthdate` in 2021–2023; `yearspro` in 2025). When a column has no values in a season's `matched=1` rows there is nothing to compute a fill from; the build shall skip it (logging a warning) and leave the corresponding `matched=0` cells empty. An empty `matched=0` cell in such a column is consistent with the `matched=1` rows of that season, which are empty too. |
 
 ### 3.8 Mapping File
 
@@ -191,7 +192,7 @@ The build is expected to be executable from the repository root via a single com
 | DB-OUT-10 | The build shall emit `Data/processed/madden_all.csv` containing the Madden rows of all six seasons. Its columns are: `madden_id` (first column, build-assigned), followed by the 55 source Madden columns (the raw 56-column schema minus the dropped source `madden_id`, and including `season`), followed by `matched` (last column). |
 | DB-OUT-11 | The processed Madden file shall contain `R + N` rows, where `R` is the total number of raw Madden rows summed across the six season files and `N` is the number of unique unmatched starters appended (see §3.6). |
 | DB-OUT-12 | The processed Madden file shall be sorted ascending by `madden_id`. Because `madden_id` is season-prefixed, this groups the file by season. |
-| DB-OUT-13 | After null-fill (§3.7), no cell in any `matched=0` row shall be null. Cells in `matched=1` rows may remain null if they were null in the raw source. |
+| DB-OUT-13 | After null-fill (§3.7), no cell in any `matched=0` row shall be null, except in columns skipped per `DB-FILL-06` (entirely empty in that season's `matched=1` rows) and the identity columns `fullname` / `position` when the originating box-score slot was itself blank. Cells in `matched=1` rows may remain null if they were null in the raw source. |
 
 ### 3.11 Build Manifest
 

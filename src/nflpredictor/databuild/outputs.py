@@ -1,15 +1,15 @@
-"""CSV emission helpers (§3.8–§3.10).
+"""CSV emission helpers (§3.8-§3.10).
 
-Outputs land in ``Data/processed/``:
-  - ``madden_2024.csv`` — augmented Madden roster (madden_id + matched).
-  - ``box_scores_2024.csv`` — same shape as raw, _ID columns rewritten.
-  - ``player_id_mapping.csv`` — one row per unique (box_score_id, madden_id).
+Outputs land in ``Data/processed/`` as combined six-season files:
+  - ``madden_all.csv`` — augmented Madden roster (madden_id + matched).
+  - ``box_scores_all.csv`` — same shape as raw + season, _ID columns rewritten.
+  - ``player_id_mapping.csv`` — one row per unique (season, box_score_id, madden_id).
 """
 
 from __future__ import annotations
 
 import pathlib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Iterable, Optional
 
 import pandas as pd
@@ -18,7 +18,7 @@ from .matching import MatchResult, Starter
 from .unmatched import IDENTITY_COLUMNS, MATCHED_COLUMN
 
 
-# Tier rank used by DB-MAP-05: when a pair has multiple notes across the
+# Tier rank used by DB-MAP-05: when a triple has multiple notes across the
 # season, the higher rank wins (later tier carries more nuance).
 _TIER_RANK = {1: 1, 2: 2, 3: 3, 4: 4, 0: 5}
 
@@ -27,9 +27,21 @@ _TIER_RANK = {1: 1, 2: 2, 3: 3, 4: 4, 0: 5}
 class MappingRecord:
     """One row of `player_id_mapping.csv` (DB-MAP-01..06)."""
 
+    season: str
     box_score_id: str
     madden_id: str
     note: str
+
+
+def _slot_id_columns(columns: Iterable[str]) -> list[str]:
+    """Return the 44 per-slot ``_ID`` column names present in ``columns``."""
+    return [
+        c for c in columns
+        if c.endswith("_ID") and (
+            c.startswith("HomeOff") or c.startswith("HomeDef")
+            or c.startswith("AwayOff") or c.startswith("AwayDef")
+        )
+    ]
 
 
 def write_madden(madden_df: pd.DataFrame, path: pathlib.Path) -> None:
@@ -54,11 +66,7 @@ def rewrite_box_score_ids(
     e.g. ``("202409050kan", "HomeOff01_ID")``.
     """
     result = box_scores_df.copy()
-    id_columns = [c for c in result.columns if c.endswith("_ID") and (
-        c.startswith("HomeOff") or c.startswith("HomeDef")
-        or c.startswith("AwayOff") or c.startswith("AwayDef")
-    )]
-    for col in id_columns:
+    for col in _slot_id_columns(result.columns):
         result[col] = [
             slot_to_madden_id[(game_id, col)]
             for game_id in result["GameId"]
@@ -73,11 +81,7 @@ def write_box_scores(
     out = processed_box_scores_df.sort_values(
         "GameId", kind="stable", ignore_index=True
     )
-    id_columns = [c for c in out.columns if c.endswith("_ID") and (
-        c.startswith("HomeOff") or c.startswith("HomeDef")
-        or c.startswith("AwayOff") or c.startswith("AwayDef")
-    )]
-    for col in id_columns:
+    for col in _slot_id_columns(out.columns):
         blanks = (out[col] == "").sum()
         if blanks:
             raise ValueError(
@@ -90,8 +94,9 @@ def write_box_scores(
 
 def build_mapping_records(
     pairs: Iterable[tuple[Starter, MatchResult]],
+    season: str,
 ) -> list[MappingRecord]:
-    """Build one record per unique ``(box_score_id, madden_id)`` pair.
+    """Build one record per unique ``(box_score_id, madden_id)`` pair for a season.
 
     Pairs with the same key but different tiers across the season collapse
     to a single record carrying the most informative note (DB-MAP-05).
@@ -121,7 +126,9 @@ def build_mapping_records(
         if best_blank_seen.get((box_id, madden_id)):
             note += "; blank source _id; resolved by name"
         records.append(
-            MappingRecord(box_score_id=box_id, madden_id=madden_id, note=note)
+            MappingRecord(
+                season=season, box_score_id=box_id, madden_id=madden_id, note=note
+            )
         )
     return records
 
@@ -129,8 +136,8 @@ def build_mapping_records(
 def write_mapping(records: list[MappingRecord], path: pathlib.Path) -> None:
     """Write the mapping CSV sorted by ``(madden_id, box_score_id)`` (DB-MAP-06)."""
     df = pd.DataFrame(
-        [(r.box_score_id, r.madden_id, r.note) for r in records],
-        columns=["box_score_id", "madden_id", "note"],
+        [(r.season, r.box_score_id, r.madden_id, r.note) for r in records],
+        columns=["season", "box_score_id", "madden_id", "note"],
     )
     df = df.sort_values(
         ["madden_id", "box_score_id"], kind="stable", ignore_index=True

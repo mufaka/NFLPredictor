@@ -11,7 +11,7 @@ import re
 import unicodedata
 
 
-NORMALIZATION_VERSION = "v1"
+NORMALIZATION_VERSION = "v2"
 
 _SUFFIX_PATTERN = re.compile(
     r"\s+(?:jr|sr|ii|iii|iv)\.?$",

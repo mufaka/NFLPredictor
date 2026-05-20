@@ -19,13 +19,10 @@ def test_override_referencing_unknown_madden_id_fails(tmp_path: pathlib.Path):
     raw_copy = tmp_path / "raw"
     raw_copy.mkdir()
     shutil.copy(RAW_TINY / "box_scores_2024.csv", raw_copy / "box_scores_2024.csv")
-    shutil.copy(
-        RAW_TINY / "maddennfl24fullplayerratings.csv",
-        raw_copy / "maddennfl24fullplayerratings.csv",
-    )
+    shutil.copy(RAW_TINY / "madden_2024.csv", raw_copy / "madden_2024.csv")
     (raw_copy / "player_overrides.csv").write_text(
-        "box_score_name,box_score_team_code,box_score_id,madden_id,reason\n"
-        "Patrick Mahomes,kan,,2024-99999,points at a nonexistent row\n",
+        "season,box_score_name,box_score_team_code,box_score_id,madden_id,reason\n"
+        "2024,Patrick Mahomes,kan,,2024-99999,points at a nonexistent row\n",
         encoding="utf-8",
     )
     out = tmp_path / "out"

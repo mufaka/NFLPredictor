@@ -25,7 +25,7 @@ def two_runs(tmp_path_factory):
 
 @pytest.mark.parametrize(
     "filename",
-    ["madden_2024.csv", "box_scores_2024.csv", "player_id_mapping.csv"],
+    ["madden_all.csv", "box_scores_all.csv", "player_id_mapping.csv"],
 )
 def test_csv_outputs_byte_identical(two_runs, filename: str):
     a, b = two_runs

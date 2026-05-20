@@ -57,7 +57,7 @@ def test_build_manifest_shape(tmp_path: pathlib.Path):
         now=_dt.datetime(2026, 5, 17, 0, 0, 0, tzinfo=_dt.timezone.utc),
     )
     assert manifest["build_timestamp_utc"] == "2026-05-17T00:00:00Z"
-    assert manifest["normalization_version"] == "v1"
+    assert manifest["normalization_version"] == "v2"
     assert set(manifest["source_sha256"].keys()) == {"raw/src.csv"}
     assert set(manifest["output_sha256"].keys()) == {"processed/out.csv"}
     assert manifest["git_commit"] is None  # tmp_path is not a git repo

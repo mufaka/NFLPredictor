@@ -1,71 +1,72 @@
-"""PFR three-letter team code <-> Madden franchise nickname mapping.
+"""PFR three-letter team code <-> Madden team abbreviation mapping.
 
-The box-score CSV uses Pro-Football-Reference codes (e.g. ``kan``, ``rav``).
-The Madden ratings CSV uses franchise nicknames (e.g. ``Chiefs``, ``Ravens``).
-These two tables are the canonical bridge between them.
+The box-score CSVs use Pro-Football-Reference codes (e.g. ``kan``, ``rav``).
+The Madden ratings CSVs use modern NFL team abbreviations (e.g. ``KC``,
+``BAL``). PFR codes are franchise-stable across all six seasons, so this
+single table is the canonical bridge for every year.
 """
 
 from __future__ import annotations
 
 
-PFR_CODE_TO_MADDEN_NICKNAME: dict[str, str] = {
-    "atl": "Falcons",
-    "buf": "Bills",
-    "car": "Panthers",
-    "chi": "Bears",
-    "cin": "Bengals",
-    "cle": "Browns",
-    "clt": "Colts",
-    "crd": "Cardinals",
-    "dal": "Cowboys",
-    "den": "Broncos",
-    "det": "Lions",
-    "gnb": "Packers",
-    "htx": "Texans",
-    "jax": "Jaguars",
-    "kan": "Chiefs",
-    "mia": "Dolphins",
-    "min": "Vikings",
-    "nor": "Saints",
-    "nwe": "Patriots",
-    "nyg": "Giants",
-    "nyj": "Jets",
-    "oti": "Titans",
-    "phi": "Eagles",
-    "pit": "Steelers",
-    "rai": "Raiders",
-    "ram": "Rams",
-    "rav": "Ravens",
-    "sdg": "Chargers",
-    "sea": "Seahawks",
-    "sfo": "49ers",
-    "tam": "Buccaneers",
-    "was": "Commanders",
+PFR_CODE_TO_MADDEN_ABBREV: dict[str, str] = {
+    "atl": "ATL",
+    "buf": "BUF",
+    "car": "CAR",
+    "chi": "CHI",
+    "cin": "CIN",
+    "cle": "CLE",
+    "clt": "IND",
+    "crd": "ARI",
+    "dal": "DAL",
+    "den": "DEN",
+    "det": "DET",
+    "gnb": "GB",
+    "htx": "HOU",
+    "jax": "JAX",
+    "kan": "KC",
+    "mia": "MIA",
+    "min": "MIN",
+    "nor": "NO",
+    "nwe": "NE",
+    "nyg": "NYG",
+    "nyj": "NYJ",
+    "oti": "TEN",
+    "phi": "PHI",
+    "pit": "PIT",
+    "rai": "LV",
+    "ram": "LAR",
+    "rav": "BAL",
+    "sdg": "LAC",
+    "sea": "SEA",
+    "sfo": "SF",
+    "tam": "TB",
+    "was": "WAS",
 }
 
 
-_MADDEN_NICKNAME_TO_PFR_CODE: dict[str, str] = {
-    nickname: code for code, nickname in PFR_CODE_TO_MADDEN_NICKNAME.items()
+_MADDEN_ABBREV_TO_PFR_CODE: dict[str, str] = {
+    abbrev: code for code, abbrev in PFR_CODE_TO_MADDEN_ABBREV.items()
 }
 
 
 def normalize_team_code(pfr_code: str) -> str:
-    """Return the Madden nickname for a PFR code. Raises ``KeyError`` for unknowns."""
+    """Return the Madden abbreviation for a PFR code. Raises ``KeyError`` for unknowns."""
     try:
-        return PFR_CODE_TO_MADDEN_NICKNAME[pfr_code]
+        return PFR_CODE_TO_MADDEN_ABBREV[pfr_code]
     except KeyError as exc:
         raise KeyError(
             f"Unknown PFR team code {pfr_code!r}; "
-            f"known codes: {sorted(PFR_CODE_TO_MADDEN_NICKNAME)}"
+            f"known codes: {sorted(PFR_CODE_TO_MADDEN_ABBREV)}"
         ) from exc
 
 
-def madden_nickname_to_pfr_code(nickname: str) -> str:
-    """Reverse lookup: Madden nickname -> PFR code. Useful for diagnostics."""
+def madden_abbrev_to_pfr_code(abbrev: str) -> str:
+    """Reverse lookup: Madden abbreviation -> PFR code. Useful for diagnostics."""
     try:
-        return _MADDEN_NICKNAME_TO_PFR_CODE[nickname]
+        return _MADDEN_ABBREV_TO_PFR_CODE[abbrev]
     except KeyError as exc:
         raise KeyError(
-            f"Unknown Madden nickname {nickname!r}; "
-            f"known nicknames: {sorted(_MADDEN_NICKNAME_TO_PFR_CODE)}"
+            f"Unknown Madden abbreviation {abbrev!r}; "
+            f"known abbreviations: {sorted(_MADDEN_ABBREV_TO_PFR_CODE)}"
         ) from exc

@@ -1,18 +1,17 @@
-"""Top-level orchestration of the Phase 1 data build."""
+"""Top-level orchestration of the Phase 1 data build (multi-year, 2020-2025)."""
 
 from __future__ import annotations
 
 import collections
 import pathlib
 import sys
-from typing import Iterable, Iterator
+from typing import Iterator
 
 import pandas as pd
 
 from .ids import assign_raw_madden_ids
 from .matching import (
     MaddenRow,
-    MatchIndexes,
     MatchResult,
     Starter,
     build_match_indexes,
@@ -21,6 +20,7 @@ from .matching import (
 from .manifest import build_manifest, write_manifest
 from .normalization import normalize_name
 from .outputs import (
+    MappingRecord,
     build_mapping_records,
     rewrite_box_score_ids,
     write_box_scores,
@@ -29,13 +29,32 @@ from .outputs import (
 )
 from .overrides import build_override_index, load_overrides
 from .unmatched import (
-    MATCHED_COLUMN,
-    UnmatchedPlayer,
     append_unmatched_rows,
     collect_unmatched_starters,
     compute_fill_values,
     fill_unmatched_rows,
 )
+
+
+# The canonical season set for the real build. The build actually processes
+# whatever ``box_scores_<YYYY>.csv`` files are present in the raw directory
+# (see :func:`discover_seasons`), so a 2026 season needs no code change and
+# the tiny test fixture can ship a two-season subset.
+SEASONS: tuple[int, ...] = (2020, 2021, 2022, 2023, 2024, 2025)
+
+
+def discover_seasons(raw_dir: pathlib.Path) -> list[int]:
+    """Return the sorted seasons that have a ``box_scores_<YYYY>.csv`` in ``raw_dir``."""
+    seasons: list[int] = []
+    for path in raw_dir.glob("box_scores_*.csv"):
+        suffix = path.stem.rsplit("_", 1)[-1]
+        if suffix.isdigit():
+            seasons.append(int(suffix))
+    if not seasons:
+        raise ValueError(
+            f"no box_scores_<YYYY>.csv files found in {raw_dir}"
+        )
+    return sorted(seasons)
 
 
 EXPECTED_BOX_SCORES_HEADER: tuple[str, ...] = (
@@ -111,77 +130,70 @@ EXPECTED_BOX_SCORES_HEADER: tuple[str, ...] = (
 )
 
 
+# The raw Madden file's 56-column header. The leading ``madden_id`` is the
+# source's own (non-unique, non-PFR) identifier; it is dropped on read
+# (DB-IN-06) and replaced by the build's assigned ``madden_id``.
 EXPECTED_MADDEN_HEADER: tuple[str, ...] = (
-    "Team",
-    "Position",
-    "Full Name",
-    "Overall Rating",
-    "Jersey Number",
-    "Speed",
-    "Acceleration",
-    "Strength",
-    "Agility",
-    "Awareness",
-    "Catching",
-    "Carrying",
-    "Throw Power",
-    "Kick Power",
-    "Kick Accuracy",
-    "Run Block",
-    "Pass Block",
-    "Tackle",
-    "Break Tackle",
-    "Jumping",
-    "Kick Return",
-    "Injury",
-    "Stamina",
-    "Toughness",
-    "Trucking",
-    "Change Of Direction",
-    "Ball Carrier Vision",
-    "Stiff Arm",
-    "Spin Move",
-    "Juke Move",
-    "Impact Blocking",
-    "Run Block Power",
-    "Run Block Finesse",
-    "Pass Block Power",
-    "Pass Block Finesse",
-    "Lead Block",
-    "Break Sack",
-    "Throw Under Pressure",
-    "Power Moves",
-    "Finesse Moves",
-    "Block Shedding",
-    "Pursuit",
-    "Play Recognition",
-    "Man Coverage",
-    "Zone Coverage",
-    "Spectacular Catch",
-    "Catch In Traffic",
-    "Short Route Running",
-    "Medium Route Running",
-    "Deep Route Running",
-    "Hit Power",
-    "Press",
-    "Release",
-    "Throw Accuracy Short",
-    "Throw Accuracy Mid",
-    "Throw Accuracy Deep",
-    "Play Action",
-    "Throw On The Run",
-    "Height",
-    "Weight",
-    "Age",
-    "Birthdate",
-    "Years Pro",
-    "Running Style",
-    "Archetype",
-    "College",
-    "Total Salary",
-    "Signing Bonus",
-    "Player Handness",
+    "madden_id",
+    "team",
+    "season",
+    "fullname",
+    "high_pos_group",
+    "position_group",
+    "position",
+    "overallrating",
+    "agility",
+    "acceleration",
+    "speed",
+    "stamina",
+    "strength",
+    "toughness",
+    "injury",
+    "awareness",
+    "jumping",
+    "trucking",
+    "archetype",
+    "runningstyle",
+    "changeofdirection",
+    "playrecognition",
+    "throwpower",
+    "throwaccuracyshort",
+    "throwaccuracymid",
+    "throwaccuracydeep",
+    "playaction",
+    "throwonrun",
+    "carrying",
+    "ballcarriervision",
+    "stiffarm",
+    "spinmove",
+    "jukemove",
+    "catching",
+    "shortrouterunning",
+    "midrouterunning",
+    "deeprouterunning",
+    "spectacularcatch",
+    "catchintraffic",
+    "release",
+    "runblocking",
+    "passblocking",
+    "impactblocking",
+    "mancoverage",
+    "zonecoverage",
+    "tackle",
+    "hitpower",
+    "press",
+    "pursuit",
+    "kickaccuracy",
+    "kickpower",
+    "return",
+    "jerseynumber",
+    "yearspro",
+    "age",
+    "birthdate",
 )
+
+
+SOURCE_MADDEN_ID_COLUMN = "madden_id"
 
 
 def _format_header_diff(
@@ -205,37 +217,35 @@ def _format_header_diff(
 
 
 def load_raw_box_scores(path: pathlib.Path) -> pd.DataFrame:
-    """Load ``box_scores_2024.csv`` and assert its header matches the spec."""
+    """Load one season's box-scores CSV and assert its header matches the spec.
+
+    Pandas' parser transparently normalizes both ``LF`` and ``CRLF`` line
+    endings on read (DB-IN-05), so no explicit handling is required here.
+    """
     df = pd.read_csv(path, dtype=str, keep_default_na=False)
     actual = tuple(df.columns)
     if actual != EXPECTED_BOX_SCORES_HEADER:
         raise ValueError(
-            "box_scores header mismatch: "
+            f"box_scores header mismatch in {path.name}: "
             + _format_header_diff(actual, EXPECTED_BOX_SCORES_HEADER)
         )
     return df
 
 
 def load_raw_madden(path: pathlib.Path) -> pd.DataFrame:
-    """Load the Madden ratings CSV, stripping whitespace from headers (DB-IN-05)."""
+    """Load one season's Madden CSV; validate header and drop the source ``madden_id``.
+
+    The build assigns its own ``madden_id`` (DB-ID-01), so the raw file's
+    own column of that name is dropped on read (DB-IN-06).
+    """
     df = pd.read_csv(path, dtype=str, keep_default_na=False)
-    df.columns = [c.strip() for c in df.columns]
     actual = tuple(df.columns)
     if actual != EXPECTED_MADDEN_HEADER:
         raise ValueError(
-            "Madden header mismatch: "
+            f"Madden header mismatch in {path.name}: "
             + _format_header_diff(actual, EXPECTED_MADDEN_HEADER)
         )
-    return df
-
-
-def load_raw_inputs(
-    raw_dir: pathlib.Path,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Convenience wrapper returning ``(box_scores_df, madden_df)``."""
-    box_scores = load_raw_box_scores(raw_dir / "box_scores_2024.csv")
-    madden = load_raw_madden(raw_dir / "maddennfl24fullplayerratings.csv")
-    return box_scores, madden
+    return df.drop(columns=[SOURCE_MADDEN_ID_COLUMN])
 
 
 SLOT_PREFIXES: tuple[str, ...] = tuple(
@@ -274,10 +284,10 @@ def _build_madden_rows_from_df(madden_df: pd.DataFrame) -> list[MaddenRow]:
     return [
         MaddenRow(
             madden_id=r["madden_id"],
-            team=r["Team"],
-            position=r["Position"],
-            full_name=r["Full Name"],
-            normalized_name=normalize_name(r["Full Name"]),
+            team=r["team"],
+            position=r["position"],
+            full_name=r["fullname"],
+            normalized_name=normalize_name(r["fullname"]),
         )
         for _, r in madden_df.iterrows()
     ]
@@ -355,29 +365,44 @@ def _counts(
     }
 
 
-def run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None:
-    """Run the full data build end-to-end."""
-    box_scores_df, raw_madden_df = load_raw_inputs(raw_dir)
+def _sum_counts(by_season: dict[str, dict[str, int]]) -> dict[str, int]:
+    """Sum each per-season count key into a project-wide total."""
+    total: collections.Counter[str] = collections.Counter()
+    for season_counts in by_season.values():
+        for key, value in season_counts.items():
+            total[key] += value
+    return dict(total)
+
+
+def _build_one_season(
+    season: int,
+    box_scores_df: pd.DataFrame,
+    raw_madden_df: pd.DataFrame,
+    season_overrides: list,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[MappingRecord], dict[str, int]]:
+    """Run the full match/append/null-fill pipeline for a single season."""
     raw_madden_count = len(raw_madden_df)
 
-    madden_with_ids = assign_raw_madden_ids(raw_madden_df)
+    madden_with_ids = assign_raw_madden_ids(raw_madden_df, season)
 
-    overrides = load_overrides(raw_dir / "player_overrides.csv")
     override_index = build_override_index(
-        overrides, set(madden_with_ids["madden_id"])
+        season_overrides, set(madden_with_ids["madden_id"])
     )
 
     match_indexes = build_match_indexes(_build_madden_rows_from_df(madden_with_ids))
 
+    box_with_season = box_scores_df.copy()
+    box_with_season.insert(0, "season", str(season))
+
     pairs: list[tuple[Starter, MatchResult]] = []
-    for starter in iter_starters(box_scores_df):
+    for starter in iter_starters(box_with_season):
         result = match_starter(starter, match_indexes, override_index)
         _log_position_mismatch(starter, result)
         pairs.append((starter, result))
 
     unmatched_players = collect_unmatched_starters(pairs)
     augmented_madden, assignments = append_unmatched_rows(
-        madden_with_ids, unmatched_players
+        madden_with_ids, unmatched_players, season
     )
 
     resolved = _resolve_unmatched_ids(pairs, assignments)
@@ -386,19 +411,12 @@ def run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None:
     filled_madden = fill_unmatched_rows(augmented_madden, fill_values)
 
     slot_to_madden_id: dict[tuple[str, str], str] = {
-        (s.game_id, f"{s.slot_column}_ID"): r.madden_id  # type: ignore[arg-type]
+        (s.game_id, f"{s.slot_column}_ID"): r.madden_id  # type: ignore[dict-item]
         for s, r in resolved
     }
-    processed_box_scores = rewrite_box_score_ids(box_scores_df, slot_to_madden_id)
+    processed_box_scores = rewrite_box_score_ids(box_with_season, slot_to_madden_id)
 
-    madden_path = processed_dir / "madden_2024.csv"
-    box_scores_path = processed_dir / "box_scores_2024.csv"
-    mapping_path = processed_dir / "player_id_mapping.csv"
-    manifest_path = processed_dir / "build_manifest.json"
-
-    write_madden(filled_madden, madden_path)
-    write_box_scores(processed_box_scores, box_scores_path)
-    write_mapping(build_mapping_records(resolved), mapping_path)
+    mapping_records = build_mapping_records(resolved, str(season))
 
     counts = _counts(
         raw_madden_rows=raw_madden_count,
@@ -406,16 +424,63 @@ def run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None:
         box_score_games=len(box_scores_df),
         resolved=resolved,
     )
+    return filled_madden, processed_box_scores, mapping_records, counts
+
+
+def run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None:
+    """Run the full multi-year data build end-to-end."""
+    overrides = load_overrides(raw_dir / "player_overrides.csv")
+    seasons = discover_seasons(raw_dir)
+
+    per_season_madden: list[pd.DataFrame] = []
+    per_season_box: list[pd.DataFrame] = []
+    all_mapping_records: list[MappingRecord] = []
+    by_season_counts: dict[str, dict[str, int]] = {}
+
+    for season in seasons:
+        box_df = load_raw_box_scores(raw_dir / f"box_scores_{season}.csv")
+        raw_madden_df = load_raw_madden(raw_dir / f"madden_{season}.csv")
+        season_overrides = [o for o in overrides if o.season == str(season)]
+
+        madden_df, box_out, records, counts = _build_one_season(
+            season, box_df, raw_madden_df, season_overrides
+        )
+        per_season_madden.append(madden_df)
+        per_season_box.append(box_out)
+        all_mapping_records.extend(records)
+        by_season_counts[str(season)] = counts
+
+    madden_all = pd.concat(per_season_madden, ignore_index=True)
+    box_scores_all = pd.concat(per_season_box, ignore_index=True)
+
+    madden_path = processed_dir / "madden_all.csv"
+    box_scores_path = processed_dir / "box_scores_all.csv"
+    mapping_path = processed_dir / "player_id_mapping.csv"
+    manifest_path = processed_dir / "build_manifest.json"
+
+    write_madden(madden_all, madden_path)
+    write_box_scores(box_scores_all, box_scores_path)
+    write_mapping(all_mapping_records, mapping_path)
+
+    raw_inputs: dict[str, pathlib.Path] = {}
+    for season in seasons:
+        raw_inputs[f"Data/raw/box_scores_{season}.csv"] = (
+            raw_dir / f"box_scores_{season}.csv"
+        )
+        raw_inputs[f"Data/raw/madden_{season}.csv"] = (
+            raw_dir / f"madden_{season}.csv"
+        )
+    raw_inputs["Data/raw/player_overrides.csv"] = raw_dir / "player_overrides.csv"
+
+    counts = {
+        "total": _sum_counts(by_season_counts),
+        "by_season": by_season_counts,
+    }
     manifest = build_manifest(
-        raw_inputs={
-            "Data/raw/box_scores_2024.csv": raw_dir / "box_scores_2024.csv",
-            "Data/raw/maddennfl24fullplayerratings.csv":
-                raw_dir / "maddennfl24fullplayerratings.csv",
-            "Data/raw/player_overrides.csv": raw_dir / "player_overrides.csv",
-        },
+        raw_inputs=raw_inputs,
         outputs={
-            "Data/processed/madden_2024.csv": madden_path,
-            "Data/processed/box_scores_2024.csv": box_scores_path,
+            "Data/processed/madden_all.csv": madden_path,
+            "Data/processed/box_scores_all.csv": box_scores_path,
             "Data/processed/player_id_mapping.csv": mapping_path,
         },
         counts=counts,
@@ -423,10 +488,14 @@ def run_build(raw_dir: pathlib.Path, processed_dir: pathlib.Path) -> None:
     )
     write_manifest(manifest, manifest_path)
 
+    total = counts["total"]
     print(
+        "multi-year build complete ({n} seasons): "
         "tier1: {tier1_matches}, tier2: {tier2_matches}, "
         "tier3: {tier3_matches}, tier4: {tier4_matches}, "
         "unmatched: {unmatched_players_unique}, "
-        "position mismatches: {position_mismatches_logged}".format(**counts),
+        "position mismatches: {position_mismatches_logged}".format(
+            n=len(seasons), **total
+        ),
         file=sys.stderr,
     )

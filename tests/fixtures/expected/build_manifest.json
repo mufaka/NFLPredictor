@@ -1,28 +1,60 @@
 {
   "build_timestamp_utc": "<blanked-by-regenerate>",
   "counts": {
-    "box_score_games": 1,
-    "position_mismatches_logged": 1,
-    "raw_madden_rows": 148,
-    "tier1_matches": 1,
-    "tier2_matches": 33,
-    "tier3_matches": 1,
-    "tier4_matches": 1,
-    "total_madden_rows_processed": 156,
-    "total_starter_slots": 44,
-    "unmatched_appended_rows": 8,
-    "unmatched_players_unique": 8
+    "by_season": {
+      "2024": {
+        "box_score_games": 1,
+        "position_mismatches_logged": 2,
+        "raw_madden_rows": 139,
+        "tier1_matches": 1,
+        "tier2_matches": 39,
+        "tier3_matches": 1,
+        "tier4_matches": 1,
+        "total_madden_rows_processed": 141,
+        "total_starter_slots": 44,
+        "unmatched_appended_rows": 2,
+        "unmatched_players_unique": 2
+      },
+      "2025": {
+        "box_score_games": 1,
+        "position_mismatches_logged": 2,
+        "raw_madden_rows": 148,
+        "tier1_matches": 0,
+        "tier2_matches": 43,
+        "tier3_matches": 0,
+        "tier4_matches": 0,
+        "total_madden_rows_processed": 149,
+        "total_starter_slots": 44,
+        "unmatched_appended_rows": 1,
+        "unmatched_players_unique": 1
+      }
+    },
+    "total": {
+      "box_score_games": 2,
+      "position_mismatches_logged": 4,
+      "raw_madden_rows": 287,
+      "tier1_matches": 1,
+      "tier2_matches": 82,
+      "tier3_matches": 1,
+      "tier4_matches": 1,
+      "total_madden_rows_processed": 290,
+      "total_starter_slots": 88,
+      "unmatched_appended_rows": 3,
+      "unmatched_players_unique": 3
+    }
   },
-  "git_commit": "35f47363369a82b4b2149ac90ffcc2b989619ca7",
-  "normalization_version": "v1",
+  "git_commit": "1f69f5f2b38da2da07ffa72d7c1ac980e6d5f07c",
+  "normalization_version": "v2",
   "output_sha256": {
-    "Data/processed/box_scores_2024.csv": "2cf2d590427c1402ab30164e70f5e7f9dc9a4b407cebbf0479ca237eb603de3c",
-    "Data/processed/madden_2024.csv": "90979efac8a56c313e410bc6bb6af7f39ca322f80ca376974950d62cb824e30e",
-    "Data/processed/player_id_mapping.csv": "79ab45a3dee0ee8a090bc175e7f16daa2830b9b6ebc5612a134fcb519a7ee3c6"
+    "Data/processed/box_scores_all.csv": "297d21d5f0d2b8e82303043173af703f4e25f9a1cc01cd85ae196b0e0d157a70",
+    "Data/processed/madden_all.csv": "f4354d9b1e9100f4eb2cf47591f7654dbe6d9a1731e54893a05f9e09e0082619",
+    "Data/processed/player_id_mapping.csv": "468ff3248c370a8e77a9f0568a986d2457055396c76329b045367e06107556c8"
   },
   "source_sha256": {
     "Data/raw/box_scores_2024.csv": "cd9197f48fe420a82c868bda7967dd6612cc7f6e24539c5b3b506c7aee191cb0",
-    "Data/raw/maddennfl24fullplayerratings.csv": "b4efe7eac78cd000fc7be2a0609b044244ecc55981b96ad6217885aa37d53acf",
-    "Data/raw/player_overrides.csv": "dfe3ae51d784fd99027d99d3ab7c70190c87c182df204b2b0cd7c7ff2e3fe0ac"
+    "Data/raw/box_scores_2025.csv": "33506cd9ead848ae39ef435e6be45c45f4703304a9505476408f9d1bd641435b",
+    "Data/raw/madden_2024.csv": "0a9d4768ea611f9f85a884adc582bca71fd25afc67537970e9aa38e89fdc9ec6",
+    "Data/raw/madden_2025.csv": "36bec0a085d91f2e8be1beb1f8ab73fdcad881f7703525858d3ceb7be3624671",
+    "Data/raw/player_overrides.csv": "09b513adb062ec91d952a3938c0136669b31936ca3f85f4179f70cc25294f4d7"
   }
 }

@@ -1,2 +1,2 @@
-box_score_name,box_score_team_code,box_score_id,madden_id,reason
-Travis Kelce,kan,,2024-00044,fixture: force tier-1 path
+season,box_score_name,box_score_team_code,box_score_id,madden_id,reason
+2024,Travis Kelce,kan,,2024-00109,fixture: force tier-1 path

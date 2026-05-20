@@ -124,4 +124,4 @@ Phases are chained by hash gates, so implementation must proceed strictly 1 → 
 
 ## Open questions
 
-1. **2020 COVID season** — 263 games and an empty-stadium / attendance anomaly. Keep as-is, or flag it for the modeling phases as a known outlier?
+All scoping questions are resolved. The 2020 COVID season (263 games, empty-stadium / attendance anomaly) is ingested **as-is** — no special-casing, no outlier flag. It is one season among six; the modeling phases treat its games like any other.

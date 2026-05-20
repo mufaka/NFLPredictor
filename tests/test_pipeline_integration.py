@@ -1,4 +1,4 @@
-"""End-to-end integration test against the tiny fixture (DB-TEST-03)."""
+"""End-to-end integration test against the tiny multi-season fixture (DB-TEST-03)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def built(tmp_path_factory):
 
 @pytest.mark.parametrize(
     "filename",
-    ["madden_2024.csv", "box_scores_2024.csv", "player_id_mapping.csv"],
+    ["madden_all.csv", "box_scores_all.csv", "player_id_mapping.csv"],
 )
 def test_csv_outputs_match_expected(built, filename: str):
     actual = (built / filename).read_bytes()
@@ -47,10 +47,23 @@ def test_manifest_matches_expected_modulo_timestamp_and_git(built):
 def test_counts_exercise_every_tier(built):
     """Sanity-check: the fixture is constructed to hit each tier at least once."""
     manifest = json.loads((built / "build_manifest.json").read_text(encoding="utf-8"))
+    total = manifest["counts"]["total"]
+    assert total["tier1_matches"] >= 1, "fixture should exercise tier 1 (override)"
+    assert total["tier2_matches"] >= 1, "fixture should exercise tier 2 (team+name)"
+    assert total["tier3_matches"] >= 1, "fixture should exercise tier 3 (post-trade)"
+    assert total["tier4_matches"] >= 1, "fixture should exercise tier 4 (fuzzy)"
+    assert total["unmatched_appended_rows"] >= 1, "fixture should exercise unmatched path"
+    assert total["position_mismatches_logged"] >= 1, "fixture should exercise position mismatch"
+
+
+def test_manifest_has_per_season_counts(built):
+    """DB-MAN-02: counts carry a total plus a per-season breakdown."""
+    manifest = json.loads((built / "build_manifest.json").read_text(encoding="utf-8"))
     counts = manifest["counts"]
-    assert counts["tier1_matches"] >= 1, "fixture should exercise tier 1 (override)"
-    assert counts["tier2_matches"] >= 1, "fixture should exercise tier 2 (team+name)"
-    assert counts["tier3_matches"] >= 1, "fixture should exercise tier 3 (post-trade)"
-    assert counts["tier4_matches"] >= 1, "fixture should exercise tier 4 (fuzzy)"
-    assert counts["unmatched_appended_rows"] >= 1, "fixture should exercise unmatched path"
-    assert counts["position_mismatches_logged"] >= 1, "fixture should exercise position mismatch"
+    assert set(counts) == {"total", "by_season"}
+    assert set(counts["by_season"]) == {"2024", "2025"}
+    # The total is the sum of the per-season values.
+    for key, total_value in counts["total"].items():
+        assert total_value == sum(
+            season_counts[key] for season_counts in counts["by_season"].values()
+        )

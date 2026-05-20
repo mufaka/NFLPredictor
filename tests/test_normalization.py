@@ -6,8 +6,8 @@ from nflpredictor.databuild.normalization import (
 )
 
 
-def test_version_is_v1():
-    assert NORMALIZATION_VERSION == "v1"
+def test_version_is_v2():
+    assert NORMALIZATION_VERSION == "v2"
 
 
 @pytest.mark.parametrize(

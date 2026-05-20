@@ -54,11 +54,14 @@ def build_manifest(
     *,
     raw_inputs: dict[str, pathlib.Path],
     outputs: dict[str, pathlib.Path],
-    counts: dict[str, int],
+    counts: dict,
     repo_dir: pathlib.Path,
     now: Optional[_dt.datetime] = None,
 ) -> dict:
-    """Assemble the manifest dict per DB-MAN-01/DB-MAN-02."""
+    """Assemble the manifest dict per DB-MAN-01/DB-MAN-02.
+
+    ``counts`` is the nested ``{"total": {...}, "by_season": {...}}`` object.
+    """
     return {
         "build_timestamp_utc": utc_timestamp(now),
         "normalization_version": NORMALIZATION_VERSION,

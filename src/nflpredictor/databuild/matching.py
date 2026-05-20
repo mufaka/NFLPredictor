@@ -34,7 +34,7 @@ class MaddenRow:
     """A light view over a Madden row used by the matcher."""
 
     madden_id: str
-    team: str          # Madden nickname (e.g. "Chiefs")
+    team: str          # Madden team abbreviation (e.g. "KC")
     position: str
     full_name: str
     normalized_name: str

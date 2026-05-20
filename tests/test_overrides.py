@@ -34,13 +34,14 @@ def test_load_overrides_parses_rows(tmp_path: pathlib.Path):
     _write_overrides(
         path,
         [
-            "Patrick Mahomes,kan,MahoPa00,2024-00001,roster swap",
-            "AJ Brown,phi,,2024-00002,name spelling",
+            "2024,Patrick Mahomes,kan,MahoPa00,2024-00001,roster swap",
+            "2023,AJ Brown,phi,,2023-00002,name spelling",
         ],
     )
     rows = load_overrides(path)
     assert rows == [
         Override(
+            season="2024",
             box_score_name="Patrick Mahomes",
             box_score_team_code="kan",
             box_score_id="MahoPa00",
@@ -48,10 +49,11 @@ def test_load_overrides_parses_rows(tmp_path: pathlib.Path):
             reason="roster swap",
         ),
         Override(
+            season="2023",
             box_score_name="AJ Brown",
             box_score_team_code="phi",
             box_score_id=None,
-            madden_id="2024-00002",
+            madden_id="2023-00002",
             reason="name spelling",
         ),
     ]
@@ -66,7 +68,7 @@ def test_header_mismatch_raises(tmp_path: pathlib.Path):
 
 def test_unknown_madden_id_raises():
     overrides = [
-        Override("Patrick Mahomes", "kan", None, "2024-99999", "typo")
+        Override("2024", "Patrick Mahomes", "kan", None, "2024-99999", "typo")
     ]
     assigned = {"2024-00001", "2024-00002"}
     with pytest.raises(ValueError, match="DB-OVR-04"):
@@ -75,8 +77,8 @@ def test_unknown_madden_id_raises():
 
 def test_ambiguous_overrides_by_id_raises():
     overrides = [
-        Override("Patrick Mahomes", "kan", "MahoPa00", "2024-00001", "a"),
-        Override("Pat Mahomes",     "kan", "MahoPa00", "2024-00002", "b"),
+        Override("2024", "Patrick Mahomes", "kan", "MahoPa00", "2024-00001", "a"),
+        Override("2024", "Pat Mahomes",     "kan", "MahoPa00", "2024-00002", "b"),
     ]
     with pytest.raises(ValueError, match="DB-OVR-05"):
         build_override_index(overrides, {"2024-00001", "2024-00002"})
@@ -84,8 +86,8 @@ def test_ambiguous_overrides_by_id_raises():
 
 def test_ambiguous_overrides_by_name_and_team_raises():
     overrides = [
-        Override("Patrick Mahomes", "kan", None, "2024-00001", "a"),
-        Override("patrick  mahomes", "kan", None, "2024-00002", "b"),
+        Override("2024", "Patrick Mahomes", "kan", None, "2024-00001", "a"),
+        Override("2024", "patrick  mahomes", "kan", None, "2024-00002", "b"),
     ]
     with pytest.raises(ValueError, match="DB-OVR-05"):
         build_override_index(overrides, {"2024-00001", "2024-00002"})
@@ -93,7 +95,7 @@ def test_ambiguous_overrides_by_name_and_team_raises():
 
 def test_lookup_by_box_score_id():
     overrides = [
-        Override("Patrick Mahomes", "kan", "MahoPa00", "2024-00001", "swap")
+        Override("2024", "Patrick Mahomes", "kan", "MahoPa00", "2024-00001", "swap")
     ]
     idx = build_override_index(overrides, {"2024-00001"})
     hit = idx.lookup(normalized_name="patrick mahomes", team_code="kan", box_score_id="MahoPa00")
@@ -102,7 +104,7 @@ def test_lookup_by_box_score_id():
 
 def test_lookup_by_name_and_team_when_id_blank():
     overrides = [
-        Override("Patrick Mahomes", "kan", None, "2024-00001", "blank id")
+        Override("2024", "Patrick Mahomes", "kan", None, "2024-00001", "blank id")
     ]
     idx = build_override_index(overrides, {"2024-00001"})
     hit = idx.lookup(normalized_name="patrick mahomes", team_code="kan", box_score_id="")

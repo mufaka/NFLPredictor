@@ -29,17 +29,17 @@ def _row(madden_id: str, team: str, position: str, full_name: str) -> MaddenRow:
 @pytest.fixture
 def fixture_indexes():
     rows = [
-        _row("2024-00001", "Chiefs",  "QB", "Patrick Mahomes"),
-        _row("2024-00002", "Chiefs",  "TE", "Travis Kelce"),
-        _row("2024-00003", "Ravens",  "QB", "Lamar Jackson"),
-        _row("2024-00004", "Ravens",  "RB", "Derrick Henry"),
+        _row("2024-00001", "KC",  "QB", "Patrick Mahomes"),
+        _row("2024-00002", "KC",  "TE", "Travis Kelce"),
+        _row("2024-00003", "BAL", "QB", "Lamar Jackson"),
+        _row("2024-00004", "BAL", "RB", "Derrick Henry"),
         # Duplicate normalized name across teams: tier 3 must NOT match this.
-        _row("2024-00005", "49ers",   "WR", "Michael Wilson"),
-        _row("2024-00006", "Cardinals","WR", "Michael Wilson"),
+        _row("2024-00005", "SF",  "WR", "Michael Wilson"),
+        _row("2024-00006", "ARI", "WR", "Michael Wilson"),
         # Lone league-wide unique name -- good Tier 3 candidate (different team).
-        _row("2024-00007", "Bears",   "WR", "DJ Moore"),
-        # Fuzzy-match target: misspelling support inside Chiefs.
-        _row("2024-00008", "Chiefs",  "WR", "Justin Watson"),
+        _row("2024-00007", "CHI", "WR", "DJ Moore"),
+        # Fuzzy-match target: misspelling support inside KC.
+        _row("2024-00008", "KC",  "WR", "Justin Watson"),
     ]
     return build_match_indexes(rows)
 
@@ -53,6 +53,7 @@ def test_tier1_wins_over_tier2(fixture_indexes):
     # Even though tier 2 would resolve Mahomes to 2024-00001, an override
     # pointing him at Travis Kelce's row must take precedence.
     override = Override(
+        season="2024",
         box_score_name="Patrick Mahomes",
         box_score_team_code="kan",
         box_score_id=None,
@@ -73,7 +74,7 @@ def test_tier1_wins_over_tier2(fixture_indexes):
 
 
 def test_tier1_records_no_reason_when_blank(fixture_indexes):
-    override = Override("Patrick Mahomes", "kan", None, "2024-00001", "")
+    override = Override("2024", "Patrick Mahomes", "kan", None, "2024-00001", "")
     idx = build_override_index([override], set(fixture_indexes.rows_by_madden_id))
     starter = Starter("g1", "HomeOff01", "Patrick Mahomes", "kan", "QB", "")
     result = tier1_override(starter, idx, fixture_indexes)
@@ -91,9 +92,8 @@ def test_tier2_hits_mahomes(fixture_indexes, empty_override_index):
 
 
 def test_tier3_unique_leaguewide(fixture_indexes):
-    # "DJ Moore" appears once league-wide on Bears; box-score team says Panthers
-    # (stale due to off-season trade). Tier 2 fails (no Bears row for DJ Moore
-    # on Panthers); Tier 3 should resolve uniquely.
+    # "DJ Moore" appears once league-wide on CHI; box-score team says Panthers
+    # (stale due to off-season trade). Tier 2 fails; Tier 3 resolves uniquely.
     starter = Starter("g1", "HomeOff03", "DJ Moore", "car", "WR", "MoorDJ00")
     result = tier3_name_leaguewide(starter, fixture_indexes)
     assert result is not None
@@ -108,7 +108,7 @@ def test_tier3_fails_when_multiple_leaguewide(fixture_indexes):
 
 
 def test_tier4_succeeds_above_threshold_with_clear_margin(fixture_indexes):
-    # "Justin Watson" present in Chiefs roster; box score writes "Justyn Watson".
+    # "Justin Watson" present in KC roster; box score writes "Justyn Watson".
     starter = Starter("g1", "HomeOff04", "Justyn Watson", "kan", "WR", "")
     result = tier4_fuzzy(starter, fixture_indexes)
     assert result is not None
@@ -120,8 +120,8 @@ def test_tier4_succeeds_above_threshold_with_clear_margin(fixture_indexes):
 def test_tier4_fails_when_runner_up_too_close(fixture_indexes):
     # Inject two near-twin names on the same team so the top-2 are within margin.
     rows = list(fixture_indexes.rows_by_madden_id.values()) + [
-        _row("2024-09001", "Chiefs", "WR", "John Smith"),
-        _row("2024-09002", "Chiefs", "WR", "Jon Smith"),
+        _row("2024-09001", "KC", "WR", "John Smith"),
+        _row("2024-09002", "KC", "WR", "Jon Smith"),
     ]
     idx = build_match_indexes(rows)
     starter = Starter("g1", "HomeOff05", "Johnathan Smith", "kan", "WR", "")
