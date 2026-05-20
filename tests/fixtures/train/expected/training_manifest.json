@@ -8,25 +8,25 @@
   "output_sha256": {
     "predictions/rung0_mean__none__season_holdout.parquet": "0f1ba9e61261f37b726777b7ffcdc865fdf142c2253dd644b9ad9af6b9864f6e",
     "predictions/rung1_team_mean__none__season_holdout.parquet": "4cc7af6b483a89051da85299d4af10aa8f35a9dbee0aec6060bf1ee024bec6f2",
-    "predictions/rung2_linear__flat__season_holdout.parquet": "9ed332b77c0494f02094d08ebe6d3df4805798fae048d796b6dede4a8db263f2",
-    "predictions/rung2_linear__pos__season_holdout.parquet": "7c94ace18378208fb7c156087fe6dbab5ab713c41c65fb77f2406b4d14b24f79",
-    "predictions/rung3_mlp__flat__season_holdout.parquet": "4eb916b5f4fd854909ed233e35a0b378e710dc0c4049a5b22ee2370604136b01",
-    "predictions/rung3_mlp__pos__season_holdout.parquet": "ea6c23bced6533cf978b8863e09394bebb9fa7870563d62a9f27b1deed8bb915",
-    "training_loss_curves.parquet": "a3029f2b45258f8c2ac013903c20cbf68ec60d5c4e3a593ef378ff614c49f21c"
+    "predictions/rung2_linear__flat__season_holdout.parquet": "f81c23ba9d9b4b630a8763cf5fe4c91f5b5a55966c9d28706337fb9bdd411afe",
+    "predictions/rung2_linear__pos__season_holdout.parquet": "3eccea6afef195f43e9e6f5e099fc7e9c1d3b3f44eadf4c91b801df6dc829f00",
+    "predictions/rung3_mlp__flat__season_holdout.parquet": "b094d9927359746ad528a2633b3b4ca4409cb9f30bdd99b4cdca2b6e30f1ae07",
+    "predictions/rung3_mlp__pos__season_holdout.parquet": "3c953e0eab3272ba234e2a485401d506b9e4928e5a405d2c9ac4d1e4d8e135df",
+    "training_loss_curves.parquet": "ebbed57c499a44949631da161a74afef1f4528584e7fadbe3181e056a0f75f55"
   },
   "phase2_manifest_git_commit": "fixture-phase2",
   "phase2_source_sha256": {
-    "Data/processed/feature_vocab.json": "8a229722cc9677dba80ecc9afd43a68e12a710a9134bbb57adf5c1d1e8acd690",
-    "Data/processed/features_flat_all.parquet": "a2fee27ece9205e52682ef57a9d3e74519890395f1225292e5a2953cbce90e3d",
-    "Data/processed/features_pos_all.parquet": "0c4c4430a3a7d8f9b6d0fc90dbbaee4aabc327f8c75bdd4f9ea20d8bc05b9d5d"
+    "Data/processed/feature_vocab.json": "d3a413af6e8b866f19082a4af865d6e4ec2bba56a600d06cc63567dc0a7e0883",
+    "Data/processed/features_flat_all.parquet": "fd5441678064f89eddbb0d249d223f0872abff112da3e0938c7e09e58b485e00",
+    "Data/processed/features_pos_all.parquet": "868d66e1a2ae79ce568b5d4725fd6b4f8782bc7e74c5f91a3872013536090a90"
   },
-  "phase3_manifest_git_commit": "6ee111b8fa29a147680782906b66ec60bd53b11e",
+  "phase3_manifest_git_commit": "58b28fc01239e2292d57457f7be5143532b377da",
   "phase3_source_sha256": {
     "Data/processed/splits_all.json": "019108b9e64f0536a50a9b31c1464be5468c2fa9775c31dc7d3fa620eb4735e4"
   },
   "seed": 1729,
   "torch_version": "2.12.0+cpu",
-  "training_config_sha256": "5a102862f13ecf65151b630a3f98d464e792ba899870b42794cbbaac8603ca90",
+  "training_config_sha256": "a5d1ab317233fc5423960bb431b0a4306c5ad9b0980b4bd251c030b132cef25b",
   "training_summaries": {
     "rung0_mean__none__season_holdout": {
       "best_epoch": null,
@@ -41,28 +41,28 @@
       "val_mae": 7.0703125
     },
     "rung2_linear__flat__season_holdout": {
+      "best_epoch": 2,
+      "epochs_trained": 10,
+      "stopped_early": false,
+      "val_mae": 10.967050790786743
+    },
+    "rung2_linear__pos__season_holdout": {
       "best_epoch": 9,
       "epochs_trained": 10,
       "stopped_early": false,
-      "val_mae": 6.4636616706848145
-    },
-    "rung2_linear__pos__season_holdout": {
-      "best_epoch": 10,
-      "epochs_trained": 10,
-      "stopped_early": false,
-      "val_mae": 6.263181924819946
+      "val_mae": 13.776077389717102
     },
     "rung3_mlp__flat__season_holdout": {
-      "best_epoch": 3,
+      "best_epoch": 7,
       "epochs_trained": 10,
       "stopped_early": false,
-      "val_mae": 7.0925681591033936
+      "val_mae": 8.382425308227539
     },
     "rung3_mlp__pos__season_holdout": {
-      "best_epoch": 3,
+      "best_epoch": 6,
       "epochs_trained": 10,
       "stopped_early": false,
-      "val_mae": 6.607354640960693
+      "val_mae": 8.864259243011475
     }
   },
   "training_version": "v4"

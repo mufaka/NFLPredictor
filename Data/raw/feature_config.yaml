@@ -1,15 +1,25 @@
 normalization_version: "v2"
 
+# Per-player Madden inputs: overall rating + the athletic-attribute ratings,
+# with position as the lone categorical. archetype was dropped in favour of
+# the granular athletic ratings (agility..awareness).
 madden_columns:
+  - "position"
   - "overallrating"
-  - "archetype"
+  - "agility"
+  - "acceleration"
+  - "speed"
+  - "stamina"
+  - "strength"
+  - "toughness"
+  - "awareness"
 
 madden_categorical_columns:
-  - "archetype"
+  - "position"
 
 game_features:
   weather: parsed              # parsed | skip
-  officials: included          # included | skip
+  officials: skip              # included | skip
   include:
     - week
     - day_of_week
@@ -17,11 +27,14 @@ game_features:
     - stadium
     - roof
     - surface
-    - home_team_code
-    - away_team_code
-    - home_coach
-    - away_coach
+    - home_team_code           # kept for the team_mean baseline + by_team
+    - away_team_code           # breakdown; excluded from the model input
     - days_rest_home
     - days_rest_away
 
 slot_shapes: [flat, pos]
+
+# Deliberately excluded: home_coach / away_coach (a coach should carry a
+# rating, not a bare name) and officials. Team codes are kept above only as a
+# baseline/diagnostic key — train/encoders.py's NON_MODEL_VOCAB_KEYS keeps
+# them out of the learned model.

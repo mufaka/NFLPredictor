@@ -311,12 +311,16 @@ def test_real_features_classify_as_expected_for_flat() -> None:
 
 
 def test_real_features_exclude_identity_categoricals() -> None:
-    """team_code / coach / official columns are present in the parquet but not classified."""
+    """Identity columns (team codes) stay in the parquet but are never classified.
+
+    The shipped config no longer emits coaches/officials at all; whatever
+    identity-only categoricals it *does* emit must not reach the model.
+    """
     vocab = load_vocab(REAL_PROCESSED)
     cvk = load_column_vocab_keys(REAL_PROCESSED)
     flat = load_features(REAL_PROCESSED, "flat")
-    # The identity columns physically exist (the team_mean baseline reads them).
-    assert {"home_team_code", "away_team_code", "home_coach", "away_coach"} <= set(flat.columns)
+    # Team codes physically exist — the team_mean baseline reads them.
+    assert {"home_team_code", "away_team_code"} <= set(flat.columns)
     cls = classify_columns(list(flat.columns), vocab, cvk)
     classified = (
         set(cls.numeric)

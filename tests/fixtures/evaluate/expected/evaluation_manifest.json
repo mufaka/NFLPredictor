@@ -19,20 +19,20 @@
       "val": 7.0703125
     },
     "rung2_linear__flat__season_holdout": {
-      "test": 7.29291296005249,
-      "val": 6.4636616706848145
+      "test": 9.404675960540771,
+      "val": 10.967050790786743
     },
     "rung2_linear__pos__season_holdout": {
-      "test": 9.732082843780518,
-      "val": 6.263181924819946
+      "test": 13.408720135688782,
+      "val": 13.776077389717102
     },
     "rung3_mlp__flat__season_holdout": {
-      "test": 6.71992301940918,
-      "val": 7.0925681591033936
+      "test": 7.4628143310546875,
+      "val": 8.382425308227539
     },
     "rung3_mlp__pos__season_holdout": {
-      "test": 8.999569416046143,
-      "val": 6.607354640960693
+      "test": 9.728074312210083,
+      "val": 8.864259243011475
     }
   },
   "evaluation_version": "v1",
@@ -41,14 +41,14 @@
   "matplotlib_version": "3.10.9",
   "numpy_version": "2.4.5",
   "output_sha256": {
-    "breakdowns/by_home_away.parquet": "acd97fd8208267c1af02c98f6a036644f2a6a766a211f7e7830c8612e2756588",
-    "breakdowns/by_roof.parquet": "910698658e4166e57d83ffa46b2b2cafc8dd997b259a1d9efdfe26df2818ea68",
-    "breakdowns/by_surface.parquet": "7f5f363a665650d69757449d9d231f4a4f5345d0f8ff21d313461e8024a8867a",
-    "breakdowns/by_team.parquet": "620317d0bfd5e67ca2b500e4f6a4cec18b4f699d925158d598bb0ff92794496f",
-    "breakdowns/by_week.parquet": "c17d113c7e13262c627ce81f17f3ee22a9a12115ee0b00e86ed7474e33e7a69e",
-    "metrics_headline.json": "5b623c2065acf16aff938a0131fc7e548ed139e9ccdfab4f737ae2deafe7ea9f",
-    "plots/ladder_summary__test.png": "4f49eb95d632c906cf847ebc8597c877bc2e076783f43a88a54493b4b1f4bbbc",
-    "plots/ladder_summary__val.png": "1c3b4281fd9ef4c3d2d0ff06d2636e7801665f6d56886b130200394d639ec5cc",
+    "breakdowns/by_home_away.parquet": "11a7bd7090a1e00944dd5f3b8ac794fa436be310d5b9516e36149809abb7a20e",
+    "breakdowns/by_roof.parquet": "8d1c35014826adb71f06ec9282d757c5a8cdf45444457cb850bd3c0a3b42cdff",
+    "breakdowns/by_surface.parquet": "e323021a4b2595246d602b8bf190f8fa48292e0aa5a5a204bc51bde711dc86f0",
+    "breakdowns/by_team.parquet": "4b7596718f8a9cab2ed2279b7199c05d7868a723f58f3cdf994eee6ad5705478",
+    "breakdowns/by_week.parquet": "c126d2f431416eeb2ba8df72416e669c7c86cf2887c4fe4a5bc6ff0ff788cc3a",
+    "metrics_headline.json": "0ee4c8ab06c5569ba6fcdfecb5516229f60bf678cd780dfb10f2ad631eef7877",
+    "plots/ladder_summary__test.png": "ada8499a0ea7cf6b2da025673bb3e2da379fea981981fc9987f93fa249e1d70f",
+    "plots/ladder_summary__val.png": "2b76d4b8dac398262360843e216e2b90a2eb4982f066d96b2ae5e54bb520576a",
     "plots/rung0_mean__none__season_holdout__test__by_week.png": "26e50d7901e8085a57829781a3e2403e8c054e455f7558ebb51ddb39c7a59ef8",
     "plots/rung0_mean__none__season_holdout__test__residuals.png": "186f0a8e6e0ee313eee211483550d994e58036e205b11fe5e0af3e5c37042c48",
     "plots/rung0_mean__none__season_holdout__test__scatter.png": "aa7eb102858f976d3856a760e8a0bc0dc5a247e6a7efb0790fe787c380dc134f",
@@ -61,35 +61,35 @@
     "plots/rung1_team_mean__none__season_holdout__val__by_week.png": "2f53c89688f1051c7b5ed8ba392b4ca4b975f09f4b87094d4fa49777dce1ba11",
     "plots/rung1_team_mean__none__season_holdout__val__residuals.png": "5839ea91f63490f70e9b8dd184b3f0d18729eb4b89a40a4490219864326baa7b",
     "plots/rung1_team_mean__none__season_holdout__val__scatter.png": "f51b446562aa67946f1bc9e0e5e476dc3ec67b279306190f4dc67402b374a04a",
-    "plots/rung2_linear__flat__season_holdout__test__by_week.png": "7f955633189cb8b3926dcfd855a0dcdd2877785510df0b1d56e3c35b2b1c420e",
-    "plots/rung2_linear__flat__season_holdout__test__residuals.png": "f414e63dd697eee16c8564cd0ff19738dec31f20b5cb052809c2eb49e0e0916a",
-    "plots/rung2_linear__flat__season_holdout__test__scatter.png": "76f01784cfb901c4fd6f839551eb056925ad7230e00a6fd1bb06c75ae6ed3615",
-    "plots/rung2_linear__flat__season_holdout__val__by_week.png": "188f6de29cef55c657c4b9af966d90f32a8a69adcbde147e21a126c11ecdfdbd",
-    "plots/rung2_linear__flat__season_holdout__val__residuals.png": "7ef8698d4fa31be1e504afa796e2a107410a40ba5b37a661b111eec673bc5fc7",
-    "plots/rung2_linear__flat__season_holdout__val__scatter.png": "c16a8fa1a72d3dcc51d8357e404d28a1602dfdb2158de1d1444f9fd0e63100a6",
-    "plots/rung2_linear__pos__season_holdout__test__by_week.png": "d20b4f6aaf62ae5a0b9895377f7f68e0aa6a6a4a22a8e8c1b5aa88d21a56a53c",
-    "plots/rung2_linear__pos__season_holdout__test__residuals.png": "e02ba1e8712d122980baece05c37971e039c8a8a521e13d00d2e49b6717851a8",
-    "plots/rung2_linear__pos__season_holdout__test__scatter.png": "0f65413ac2ef6f261a9023d4b69ea9de868d64485b00139bd0fd675ac863f250",
-    "plots/rung2_linear__pos__season_holdout__val__by_week.png": "9f0de8b499e0c3a7877e86b399916dee2c0f34b9180881bb1219d942518c8b4f",
-    "plots/rung2_linear__pos__season_holdout__val__residuals.png": "03a4158a9007b7200a7274b6e3c13516adbac30fc41847626c415457618c4f1a",
-    "plots/rung2_linear__pos__season_holdout__val__scatter.png": "62e9c25e5691f855dc5e35195c4aaa243068aeb855b0cc8b3d47b565e3336f94",
-    "plots/rung3_mlp__flat__season_holdout__test__by_week.png": "efaf49f2994ab136b9ddfaa18fee2ba3acdf882fc3ef4343825d77cd3798cb97",
-    "plots/rung3_mlp__flat__season_holdout__test__residuals.png": "e1a1bb7455e87ae222d98ebb6490f5e08cc70c386a6b0e0d11845af97c9cdf40",
-    "plots/rung3_mlp__flat__season_holdout__test__scatter.png": "f59e386b0eb13de0190fd994c185239b359dfaac9e6d374c7ddaa30b9131eea9",
-    "plots/rung3_mlp__flat__season_holdout__val__by_week.png": "894cbde176c8bd28f87433360947b99ceceecde909ae62e36035e003310523cc",
-    "plots/rung3_mlp__flat__season_holdout__val__residuals.png": "b5def7327089af0fd0ab08ec6002ab9ee3daf2faed28a8433fdf2b6fdc147a72",
-    "plots/rung3_mlp__flat__season_holdout__val__scatter.png": "4cee98e612f37f2b778aeef48e45e284c7a13412658a2d6ca3dd36bf8edda4de",
-    "plots/rung3_mlp__pos__season_holdout__test__by_week.png": "2736a0e9a92eadf104b447585f138ec7213243724c5db170db229e1970c3fdfa",
-    "plots/rung3_mlp__pos__season_holdout__test__residuals.png": "e5b9f3b7e4fe9a822036e5da20b0219f1ce5d46f32c1a4778363d49c341bce87",
-    "plots/rung3_mlp__pos__season_holdout__test__scatter.png": "e668171b17ef223f6d2b09a0ca4e966aea0f0712dc00ecb5384272d1dcd8422a",
-    "plots/rung3_mlp__pos__season_holdout__val__by_week.png": "8f518e3ffa0b0d89cbd18e0600caf6b68842c5879cde12f2eb730b33db48ebb6",
-    "plots/rung3_mlp__pos__season_holdout__val__residuals.png": "e28c277155ae3501a7da10e783a542b5e5aa759b4a65fbbe67069ba19bb7a6cf",
-    "plots/rung3_mlp__pos__season_holdout__val__scatter.png": "8547e151377879da08889ca1aa0859bcf0a60c40f76f041e35813c63503c6e45"
+    "plots/rung2_linear__flat__season_holdout__test__by_week.png": "0a617b45d82bf05aa8b3c23684d4d23402d73a00fb6eb56e4dc68c2bdb749637",
+    "plots/rung2_linear__flat__season_holdout__test__residuals.png": "c9db8ea361a6de5f08a6e5b0433399c9ac5163a7f3e1c519b1dffcf3b6030d01",
+    "plots/rung2_linear__flat__season_holdout__test__scatter.png": "eaa7183babaf0061dbe4964dc16432ddc18f019cce376fc19581d7670b8bc386",
+    "plots/rung2_linear__flat__season_holdout__val__by_week.png": "805f71eca95e0a76deaee0e405f0860d6287e2d0ef949fa8d513571ae8fe2766",
+    "plots/rung2_linear__flat__season_holdout__val__residuals.png": "751f9927042370d0fb228ebb76b4a0d671f5243b2fdb4a23bd3e7d5b3f47ec08",
+    "plots/rung2_linear__flat__season_holdout__val__scatter.png": "a60790af80573c7ee338d9af0d7ac036a0add4ad62049872eaa6a41b85de4714",
+    "plots/rung2_linear__pos__season_holdout__test__by_week.png": "31e420ee8243f7ca66e2060d159eb4fce737dc5f6353874e7e821633b78e2ccc",
+    "plots/rung2_linear__pos__season_holdout__test__residuals.png": "6588d24634817570ae6bd9852c780f25be1255bddb1c6606e452db698bc88c5a",
+    "plots/rung2_linear__pos__season_holdout__test__scatter.png": "5d505e1f6a5e12571dd64f8855188f465474ccc54043fee13215fd4bb4beae03",
+    "plots/rung2_linear__pos__season_holdout__val__by_week.png": "3a129605b5861ac064fe3204415f2495986776327c986c1b405919aaf15a07c2",
+    "plots/rung2_linear__pos__season_holdout__val__residuals.png": "1756bf4fe916eb8ecb3397c10506c0b4b4e0d8941fdb10b40553b38072f11459",
+    "plots/rung2_linear__pos__season_holdout__val__scatter.png": "a3e19722bb79749c273fa83708fbd9f56521f1174e750b1b8e218d59df4f76dc",
+    "plots/rung3_mlp__flat__season_holdout__test__by_week.png": "09c9f118f77403a0c2f62181be3ea87c1cfe03400875db3dffecc4d1430e7463",
+    "plots/rung3_mlp__flat__season_holdout__test__residuals.png": "81e97e6bd58ece37f6bcdd9cd753065fbde42c3587114b5352728fbe4a38dca7",
+    "plots/rung3_mlp__flat__season_holdout__test__scatter.png": "44e511fb639be57ec6256741fe2b5e7a0aefb1d282eed47be23e567c109ae09c",
+    "plots/rung3_mlp__flat__season_holdout__val__by_week.png": "8b876b81ef3601a96e445defc3e3cf19f64b74a3404256abb94143c7a0a00fc0",
+    "plots/rung3_mlp__flat__season_holdout__val__residuals.png": "c83fbc34f7598703b0ee4bd13bfd9101a75e3061f8c796ecec8a5a64f0bb2125",
+    "plots/rung3_mlp__flat__season_holdout__val__scatter.png": "b1fd133dd2e4cb6bdc16b3977c3236a6ab1bc8320789047ec3255b8252305775",
+    "plots/rung3_mlp__pos__season_holdout__test__by_week.png": "e41ba3f231bb29c8b6c8163363d8ab589d62d451f9d6837b2a2be66e124e9fe8",
+    "plots/rung3_mlp__pos__season_holdout__test__residuals.png": "e948203c8acddb2606ca66941d5d2a8baa86c2be04e315707667ca4f885cab09",
+    "plots/rung3_mlp__pos__season_holdout__test__scatter.png": "7fa8b15e8d3422f518d480c8571953b142da3125822163607532d50217e5a6f8",
+    "plots/rung3_mlp__pos__season_holdout__val__by_week.png": "8329f0950d140c4c3804bd01eb96b5da8b0c7e86485d2dd1812a77c85fb42f73",
+    "plots/rung3_mlp__pos__season_holdout__val__residuals.png": "0c1f965693783367daa0ee48cdd3778efdee7fd7275cae0b8db47c7a914f2723",
+    "plots/rung3_mlp__pos__season_holdout__val__scatter.png": "d9b0a0acaf867358b74dc4c84d7105d49867f3b74e577e5027adaaba9a0a44a1"
   },
   "phase2_source_sha256": {
-    "Data/processed/feature_vocab.json": "8a229722cc9677dba80ecc9afd43a68e12a710a9134bbb57adf5c1d1e8acd690",
-    "Data/processed/features_flat_all.parquet": "a2fee27ece9205e52682ef57a9d3e74519890395f1225292e5a2953cbce90e3d",
-    "Data/processed/features_pos_all.parquet": "0c4c4430a3a7d8f9b6d0fc90dbbaee4aabc327f8c75bdd4f9ea20d8bc05b9d5d"
+    "Data/processed/feature_vocab.json": "d3a413af6e8b866f19082a4af865d6e4ec2bba56a600d06cc63567dc0a7e0883",
+    "Data/processed/features_flat_all.parquet": "fd5441678064f89eddbb0d249d223f0872abff112da3e0938c7e09e58b485e00",
+    "Data/processed/features_pos_all.parquet": "868d66e1a2ae79ce568b5d4725fd6b4f8782bc7e74c5f91a3872013536090a90"
   },
   "phase3_source_sha256": {
     "Data/processed/splits_all.json": "019108b9e64f0536a50a9b31c1464be5468c2fa9775c31dc7d3fa620eb4735e4"
@@ -98,11 +98,11 @@
   "phase4_source_sha256": {
     "predictions/rung0_mean__none__season_holdout.parquet": "0f1ba9e61261f37b726777b7ffcdc865fdf142c2253dd644b9ad9af6b9864f6e",
     "predictions/rung1_team_mean__none__season_holdout.parquet": "4cc7af6b483a89051da85299d4af10aa8f35a9dbee0aec6060bf1ee024bec6f2",
-    "predictions/rung2_linear__flat__season_holdout.parquet": "9ed332b77c0494f02094d08ebe6d3df4805798fae048d796b6dede4a8db263f2",
-    "predictions/rung2_linear__pos__season_holdout.parquet": "7c94ace18378208fb7c156087fe6dbab5ab713c41c65fb77f2406b4d14b24f79",
-    "predictions/rung3_mlp__flat__season_holdout.parquet": "4eb916b5f4fd854909ed233e35a0b378e710dc0c4049a5b22ee2370604136b01",
-    "predictions/rung3_mlp__pos__season_holdout.parquet": "ea6c23bced6533cf978b8863e09394bebb9fa7870563d62a9f27b1deed8bb915",
-    "training_manifest.json": "6506a0fd1cb4800b0609454c8fecfdd1fbe13decf557c0b81ea6a49e59500b86"
+    "predictions/rung2_linear__flat__season_holdout.parquet": "f81c23ba9d9b4b630a8763cf5fe4c91f5b5a55966c9d28706337fb9bdd411afe",
+    "predictions/rung2_linear__pos__season_holdout.parquet": "3eccea6afef195f43e9e6f5e099fc7e9c1d3b3f44eadf4c91b801df6dc829f00",
+    "predictions/rung3_mlp__flat__season_holdout.parquet": "b094d9927359746ad528a2633b3b4ca4409cb9f30bdd99b4cdca2b6e30f1ae07",
+    "predictions/rung3_mlp__pos__season_holdout.parquet": "3c953e0eab3272ba234e2a485401d506b9e4928e5a405d2c9ac4d1e4d8e135df",
+    "training_manifest.json": "4a42e05a988e805d8ffbe9cb817b8762c87cc5569d5284d6af633be97e05577d"
   },
   "pyarrow_version": "24.0.0"
 }

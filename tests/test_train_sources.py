@@ -145,9 +145,9 @@ def test_strategy_available_passes() -> None:
 def test_high_card_vocab_keys_boundary() -> None:
     vocab = load_vocab(REAL_PROCESSED)
     keys = high_card_vocab_keys(vocab)
-    # Real-data: 6 high-card keys.
+    # Real-data: 4 high-card keys.
     assert keys == frozenset({
-        "archetype", "coaches", "officials", "positions", "stadium", "team_codes",
+        "position", "positions", "stadium", "team_codes",
     })
     # The three low-card keys (≤ 8): roof, surface, day_of_week.
     assert keys.isdisjoint({"roof", "surface", "day_of_week"})

@@ -1,12 +1,12 @@
 {
-  "build_timestamp_utc": "2026-05-20T19:20:07Z",
-  "git_commit": "6ee111b8fa29a147680782906b66ec60bd53b11e",
+  "build_timestamp_utc": "2026-05-20T19:35:15Z",
+  "git_commit": "58b28fc01239e2292d57457f7be5143532b377da",
   "output_sha256": {
     "Data/processed/splits_all.json": "019108b9e64f0536a50a9b31c1464be5468c2fa9775c31dc7d3fa620eb4735e4"
   },
   "phase2_manifest_git_commit": "fixture-phase2",
   "phase2_source_sha256": {
-    "Data/processed/features_flat_all.parquet": "a2fee27ece9205e52682ef57a9d3e74519890395f1225292e5a2953cbce90e3d"
+    "Data/processed/features_flat_all.parquet": "fd5441678064f89eddbb0d249d223f0872abff112da3e0938c7e09e58b485e00"
   },
   "season_assignment": {
     "test_season": 2025,

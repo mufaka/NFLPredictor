@@ -56,9 +56,10 @@ def real_build(tmp_path_factory) -> pathlib.Path:
 def test_flat_parquet_shape(real_build):
     pf = pq.read_table(real_build / FLAT_PARQUET_BASENAME).to_pandas()
     assert len(pf) == N_GAMES
-    # default config: 2 identifiers + 12 game-level + 4 weather + 7 officials
-    # + 88 slot_madden + 44 slot_position + 44 slot_matched + 2 labels = 203.
-    assert pf.shape[1] == 203
+    # shipped config: 2 identifiers + 10 game-level + 4 weather + 0 officials
+    # + 396 slot_madden (9 madden cols × 44 slots) + 44 slot_position
+    # + 44 slot_matched + 2 labels = 502.
+    assert pf.shape[1] == 502
     assert list(pf.columns[:5]) == [
         "GameId", "season", "week", "day_of_week", "start_hour",
     ]
@@ -68,8 +69,9 @@ def test_flat_parquet_shape(real_build):
 def test_pos_parquet_shape(real_build):
     pf = pq.read_table(real_build / POS_PARQUET_BASENAME).to_pandas()
     assert len(pf) == N_GAMES
-    # default config: 2 + 12 + 4 + 7 + 116 (58 × 2) + 58 present + 58 matched + 2 = 259.
-    assert pf.shape[1] == 259
+    # shipped config: 2 + 10 + 4 + 0 + 522 (9 madden cols × 58 slots)
+    # + 58 present + 58 matched + 2 labels = 656.
+    assert pf.shape[1] == 656
 
 
 def test_vocab_keys_match_spec(real_build):
@@ -78,14 +80,12 @@ def test_vocab_keys_match_spec(real_build):
     assert payload["vocab_version"] == "v3"
     entries = payload["entries"]
     expected_keys = {
-        "archetype",
+        "position",
         "day_of_week",
         "stadium",
         "roof",
         "surface",
         "team_codes",
-        "coaches",
-        "officials",
         "positions",
     }
     assert set(entries.keys()) == expected_keys
@@ -115,19 +115,19 @@ def test_manifest_structure(real_build):
         f"Data/processed/{FEATURE_VOCAB_BASENAME}",
     }
     flat_counts = manifest["column_counts"][FLAT_PARQUET_BASENAME]
-    assert flat_counts["total"] == 203
+    assert flat_counts["total"] == 502
     assert flat_counts["identifiers"] == 2
-    assert flat_counts["game_level"] == 12
+    assert flat_counts["game_level"] == 10
     assert flat_counts["weather"] == 4
-    assert flat_counts["officials"] == 7
-    assert flat_counts["slot_madden"] == 88
+    assert flat_counts["officials"] == 0
+    assert flat_counts["slot_madden"] == 396
     assert flat_counts["slot_position"] == 44
     assert flat_counts["slot_matched"] == 44
     assert flat_counts["labels"] == 2
 
     pos_counts = manifest["column_counts"][POS_PARQUET_BASENAME]
-    assert pos_counts["total"] == 259
-    assert pos_counts["slot_madden"] == 116
+    assert pos_counts["total"] == 656
+    assert pos_counts["slot_madden"] == 522
     assert pos_counts["slot_present"] == 58
     assert pos_counts["slot_matched"] == 58
 

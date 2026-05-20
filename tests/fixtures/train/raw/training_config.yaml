@@ -26,9 +26,7 @@ mlp:
   activation: gelu
   dropout: 0.1
 embedding_dims:
-  archetype: 16
-  team_codes: 8
-  coaches: 8
-  officials: 8
+  position: 16
   positions: 8
   stadium: 8
+  team_codes: 8

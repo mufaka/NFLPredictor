@@ -32,11 +32,14 @@ def test_shipped_config_loads():
     cfg = load_feature_config(SHIPPED_CONFIG)
     assert isinstance(cfg, FeatureConfig)
     assert cfg.normalization_version == "v2"
-    assert cfg.madden_columns == ("overallrating", "archetype")
-    assert cfg.madden_categorical_columns == ("archetype",)
+    assert cfg.madden_columns == (
+        "position", "overallrating", "agility", "acceleration", "speed",
+        "stamina", "strength", "toughness", "awareness",
+    )
+    assert cfg.madden_categorical_columns == ("position",)
     assert cfg.game_features == GameFeaturesConfig(
         weather="parsed",
-        officials="included",
+        officials="skip",
         include=(
             "week",
             "day_of_week",
@@ -46,8 +49,6 @@ def test_shipped_config_loads():
             "surface",
             "home_team_code",
             "away_team_code",
-            "home_coach",
-            "away_coach",
             "days_rest_home",
             "days_rest_away",
         ),
