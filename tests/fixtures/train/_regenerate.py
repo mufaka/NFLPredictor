@@ -4,10 +4,10 @@ Run from the repo root with the venv active:
 
     python -m tests.fixtures.train._regenerate
 
-The script slices the real Phase 2 outputs to a small subset — two games per
-NFL week (36 games total) — and rebuilds the chain:
+The script slices the real Phase 2 outputs to a small subset — a few games per
+season, all six seasons — and rebuilds the chain:
 
-    sliced features  →  Phase 3 run_split_build  →  splits_2024.json
+    sliced features  →  Phase 3 run_split_build  →  splits_all.json
                        Phase 4 run_training_build →  predictions/*.parquet
                                                     training_manifest.json
 
@@ -23,18 +23,18 @@ upgraded, otherwise byte-equality tests will diverge.
 
 Outputs:
     tests/fixtures/train/raw_phase2/
-        features_flat_2024.parquet
-        features_pos_2024.parquet
+        features_flat_all.parquet
+        features_pos_all.parquet
         feature_vocab.json
         feature_manifest.json
     tests/fixtures/train/raw_phase3/
-        splits_2024.json
+        splits_all.json
         splits_manifest.json
     tests/fixtures/train/raw/
         splits_config.yaml
         training_config.yaml
     tests/fixtures/train/expected/
-        predictions/*.parquet × 12
+        predictions/*.parquet
         training_manifest.json (timestamp + git_commit blanked)
 """
 
@@ -84,7 +84,7 @@ RAW_PHASE3 = FIXTURE_DIR / "raw_phase3"
 RAW_CONFIG = FIXTURE_DIR / "raw"
 EXPECTED = FIXTURE_DIR / "expected"
 
-GAMES_PER_WEEK = 2  # 2 × 18 weeks = 36 games — small enough to check in.
+GAMES_PER_SEASON = 4  # 4 × 6 seasons = 24 games — small enough to check in.
 
 
 def _sha256(path: pathlib.Path) -> str:
@@ -93,11 +93,11 @@ def _sha256(path: pathlib.Path) -> str:
 
 def _pick_game_ids() -> list[str]:
     src = REAL_PROCESSED / PHASE2_FEATURES_FLAT_BASENAME
-    df = pq.read_table(src, columns=["GameId", "week"]).to_pandas()
+    df = pq.read_table(src, columns=["GameId", "season"]).to_pandas()
     chosen = (
-        df.sort_values(["week", "GameId"], kind="mergesort")
-        .groupby("week", group_keys=False)
-        .head(GAMES_PER_WEEK)
+        df.sort_values(["season", "GameId"], kind="mergesort")
+        .groupby("season", group_keys=False)
+        .head(GAMES_PER_SEASON)
         .sort_values("GameId", kind="mergesort")
     )
     return chosen["GameId"].astype(str).tolist()
@@ -148,7 +148,7 @@ def build_fixture() -> None:
     feature_manifest = {
         "build_timestamp_utc": "fixture",
         "git_commit": "fixture-phase2",
-        "normalization_version": "v1",
+        "normalization_version": "v2",
         "output_sha256": {
             f"Data/processed/{PHASE2_FEATURES_FLAT_BASENAME}": _sha256(flat_path),
             f"Data/processed/{PHASE2_FEATURES_POS_BASENAME}": _sha256(pos_path),
@@ -185,7 +185,7 @@ def build_fixture() -> None:
         shutil.copy2(RAW_PHASE3 / name, working / name)
     run_training_build(RAW_CONFIG, working, repo_dir=REPO_ROOT)
 
-    # 7. Move expected outputs (12 prediction parquets + loss-curve sidecar + manifest) into expected/.
+    # 7. Move expected outputs (prediction parquets + loss-curve sidecar + manifest) into expected/.
     (EXPECTED / PREDICTIONS_DIRNAME).mkdir(parents=True)
     for p in sorted((working / PREDICTIONS_DIRNAME).glob("*.parquet")):
         shutil.copy2(p, EXPECTED / PREDICTIONS_DIRNAME / p.name)

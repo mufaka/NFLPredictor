@@ -1,4 +1,4 @@
-training_version: "v3"
+training_version: "v4"
 
 seed: 1729
 device: "auto"   # one of "auto" | "cpu" | "cuda"
@@ -7,7 +7,7 @@ one_hot_threshold: 8   # vocab size <= this → one-hot; > this → embedding
 
 rungs:      [mean, team_mean, linear, mlp]
 shapes:     [flat, pos]
-strategies: [S1, S3]
+strategies: [season_holdout]   # add loso_cv to also train the CV folds (~6x cost)
 
 linear:
   lr: 0.001
@@ -25,7 +25,7 @@ mlp:
   dropout: 0.1
 
 embedding_dims:
-  Archetype:   16
+  archetype:   16
   team_codes:   8
   coaches:      8
   officials:    8

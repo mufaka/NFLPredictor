@@ -29,6 +29,11 @@ LABEL_COLUMNS: tuple[str, ...] = ("home_score", "away_score")
 # GameId is the join key; never a feature.
 GAME_ID_COLUMN: str = "GameId"
 
+# Identifier columns carried in the Phase 2 feature matrices for traceability
+# and split assignment — never model features. ``season`` lets Phase 3 hold
+# out whole seasons, but the model must not train on it.
+IDENTIFIER_COLUMNS: tuple[str, ...] = ("GameId", "season")
+
 # Default cardinality boundary for low-card vs high-card; overridable via
 # training_config.yaml's ``one_hot_threshold`` (TR-CAT-01 / TR-CAT-02).
 LOW_CARD_THRESHOLD: int = 8
@@ -91,7 +96,7 @@ def classify_columns(
     column_vocab_key: dict[str, str] = {}
 
     for col in feature_columns:
-        if col == GAME_ID_COLUMN:
+        if col in IDENTIFIER_COLUMNS:
             continue
         if col in LABEL_COLUMNS:
             labels.append(col)

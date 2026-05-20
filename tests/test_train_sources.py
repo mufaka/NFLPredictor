@@ -87,7 +87,7 @@ def test_tampered_feature_vocab_fails(tmp_path: pathlib.Path) -> None:
         verify_phase2_outputs(staged)
 
 
-# (e) tampered splits_2024.json → fail-fast
+# (e) tampered splits_all.json → fail-fast
 def test_tampered_splits_fails(tmp_path: pathlib.Path) -> None:
     staged = _stage_processed(tmp_path)
     _tamper_bytes(staged / PHASE3_SPLITS_BASENAME)
@@ -127,26 +127,27 @@ def test_phase2_manifest_missing_output_sha256_block(tmp_path: pathlib.Path) -> 
         verify_phase2_outputs(staged)
 
 
-# (g) strategy requested but absent from splits_2024.json → fail-fast
+# (g) strategy requested but absent from splits_all.json → fail-fast
 def test_strategy_unavailable_fails() -> None:
     splits = load_splits_artifact(REAL_PROCESSED)
-    # Pretend the user asked for a fictional strategy "S5" alongside S1.
-    with pytest.raises(StrategyUnavailableError, match=r"S5"):
-        verify_strategy_availability(splits, ("S1", "S5"))
+    # Pretend the user asked for a fictional strategy alongside season_holdout.
+    with pytest.raises(StrategyUnavailableError, match=r"fake_strategy"):
+        verify_strategy_availability(splits, ("season_holdout", "fake_strategy"))
 
 
 def test_strategy_available_passes() -> None:
     splits = load_splits_artifact(REAL_PROCESSED)
-    verify_strategy_availability(splits, ("S1", "S3"))
+    # The shipped splits artifact carries season_holdout (loso_cv is opt-in).
+    verify_strategy_availability(splits, ("season_holdout",))
 
 
 # Helper: vocab classification matches the spec's TR-CAT-02 boundary at 8.
 def test_high_card_vocab_keys_boundary() -> None:
     vocab = load_vocab(REAL_PROCESSED)
     keys = high_card_vocab_keys(vocab)
-    # Real-data fixture: 6 high-card keys.
+    # Real-data: 6 high-card keys.
     assert keys == frozenset({
-        "Archetype", "coaches", "officials", "positions", "stadium", "team_codes",
+        "archetype", "coaches", "officials", "positions", "stadium", "team_codes",
     })
     # The three low-card keys (≤ 8): roof, surface, day_of_week.
     assert keys.isdisjoint({"roof", "surface", "day_of_week"})

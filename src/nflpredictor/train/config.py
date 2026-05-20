@@ -11,7 +11,7 @@ import yaml
 
 ALLOWED_RUNGS: frozenset[str] = frozenset({"mean", "team_mean", "linear", "mlp"})
 ALLOWED_SHAPES: frozenset[str] = frozenset({"flat", "pos"})
-ALLOWED_STRATEGIES: frozenset[str] = frozenset({"S1", "S3"})
+ALLOWED_STRATEGIES: frozenset[str] = frozenset({"season_holdout", "loso_cv"})
 ALLOWED_DEVICES: frozenset[str] = frozenset({"auto", "cpu", "cuda"})
 ALLOWED_ACTIVATIONS: frozenset[str] = frozenset({"gelu", "relu"})
 

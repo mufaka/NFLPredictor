@@ -1,4 +1,9 @@
-"""Strategy dispatch for trivial- and learned-rung predictions (TR-STRAT-01..04)."""
+"""Strategy dispatch for trivial- and learned-rung predictions (TR-STRAT-01..04).
+
+Two strategies: ``season_holdout`` (a single fixed train/val/test partition)
+and ``loso_cv`` (leave-one-season-out folds). Trivial and learned rungs each
+have a dispatch function per strategy.
+"""
 
 from __future__ import annotations
 
@@ -40,16 +45,16 @@ def _predict_trivial(rung_id: str, train_df: pd.DataFrame, target_df: pd.DataFra
     raise ValueError(f"_predict_trivial called for non-trivial rung {rung_id!r}")
 
 
-def run_trivial_combo_s1(
+def run_trivial_combo_holdout(
     rung_id: str,
     feature_df: pd.DataFrame,
     splits: dict[str, Any],
 ) -> pd.DataFrame:
-    """Train on S1.train, predict on S1.val and S1.test, return long frame with ``slice`` (TR-STRAT-01, TR-STRAT-04)."""
-    s1 = splits["S1"]
-    train_df = _select(feature_df, s1["train"])
-    val_df = _select(feature_df, s1["val"])
-    test_df = _select(feature_df, s1["test"])
+    """Train on the holdout train set, predict on val and test (TR-STRAT-01, TR-STRAT-04)."""
+    sh = splits["season_holdout"]
+    train_df = _select(feature_df, sh["train"])
+    val_df = _select(feature_df, sh["val"])
+    test_df = _select(feature_df, sh["test"])
 
     val_preds = _predict_trivial(rung_id, train_df, val_df).assign(slice="val")
     test_preds = _predict_trivial(rung_id, train_df, test_df).assign(slice="test")
@@ -58,13 +63,13 @@ def run_trivial_combo_s1(
     ]
 
 
-def run_trivial_combo_s3(
+def run_trivial_combo_cv(
     rung_id: str,
     feature_df: pd.DataFrame,
     splits: dict[str, Any],
 ) -> pd.DataFrame:
-    """Train per fold on fold.train, predict on fold.val, return long frame with ``fold_index`` (TR-STRAT-02, TR-STRAT-03, TR-STRAT-04)."""
-    folds = splits["S3"]["folds"]
+    """Train per fold on fold.train, predict on fold.val (TR-STRAT-02..04)."""
+    folds = splits["loso_cv"]["folds"]
     chunks: list[pd.DataFrame] = []
     for fold in folds:
         fold_idx = int(fold["fold_index"])
@@ -97,8 +102,8 @@ weights start from the seeded init every time.
 class LearnedComboResult:
     """A learned-rung combo's predictions plus per-fit training summary."""
 
-    predictions: pd.DataFrame              # cols: S1 → (slice,GameId,...); S3 → (fold_index,GameId,...)
-    train_results: list[TrainingResult]    # length 1 for S1, len(folds) for S3
+    predictions: pd.DataFrame              # holdout → (slice,GameId,...); cv → (fold_index,GameId,...)
+    train_results: list[TrainingResult]    # length 1 for holdout, len(folds) for cv
 
 
 def _hyperparams_for(rung_id: str, linear: LinearHyperparams, mlp: MlpHyperparams):
@@ -127,8 +132,8 @@ def _train_and_predict(
     """One full train-then-predict cycle for a learned rung.
 
     Returns ``(training_result, val_predictions, extra_predictions)``. The
-    extra frame is ``None`` unless ``extra_predict_df`` was given (S1's test
-    slice — S3 never predicts test).
+    extra frame is ``None`` unless ``extra_predict_df`` was given (the holdout
+    test slice — loso_cv never predicts test).
     """
     seed_all(seed, device)  # TR-TRAIN-02
     encoder = encoder_factory()
@@ -164,7 +169,7 @@ def _train_and_predict(
     return result, val_preds, extra_preds
 
 
-def run_learned_combo_s1(
+def run_learned_combo_holdout(
     rung_id: str,
     feature_df: pd.DataFrame,
     splits: dict[str, Any],
@@ -177,11 +182,11 @@ def run_learned_combo_s1(
     device: ResolvedDevice,
     labels_lookup: dict[str, tuple[float, float]] | None = None,
 ) -> LearnedComboResult:
-    """Train on S1.train, predict on S1.val and S1.test (TR-STRAT-01)."""
-    s1 = splits["S1"]
-    train_df = _select(feature_df, s1["train"])
-    val_df = _select(feature_df, s1["val"])
-    test_df = _select(feature_df, s1["test"])
+    """Train on the holdout train set, predict on val and test (TR-STRAT-01)."""
+    sh = splits["season_holdout"]
+    train_df = _select(feature_df, sh["train"])
+    val_df = _select(feature_df, sh["val"])
+    test_df = _select(feature_df, sh["test"])
 
     result, val_preds, test_preds = _train_and_predict(
         rung_id,
@@ -205,7 +210,7 @@ def run_learned_combo_s1(
     return LearnedComboResult(predictions=predictions, train_results=[result])
 
 
-def run_learned_combo_s3(
+def run_learned_combo_cv(
     rung_id: str,
     feature_df: pd.DataFrame,
     splits: dict[str, Any],
@@ -223,7 +228,7 @@ def run_learned_combo_s3(
     Each fold reseeds via :func:`seed_all` so per-fold predictions are
     individually byte-stable independent of fold order.
     """
-    folds = splits["S3"]["folds"]
+    folds = splits["loso_cv"]["folds"]
     results: list[TrainingResult] = []
     chunks: list[pd.DataFrame] = []
     for fold in folds:

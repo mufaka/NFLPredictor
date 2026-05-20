@@ -18,12 +18,12 @@ import pyarrow.parquet as pq
 from nflpredictor.databuild.manifest import compute_sha256
 
 
-PHASE2_FEATURES_FLAT_BASENAME = "features_flat_2024.parquet"
-PHASE2_FEATURES_POS_BASENAME = "features_pos_2024.parquet"
+PHASE2_FEATURES_FLAT_BASENAME = "features_flat_all.parquet"
+PHASE2_FEATURES_POS_BASENAME = "features_pos_all.parquet"
 PHASE2_VOCAB_BASENAME = "feature_vocab.json"
 PHASE2_MANIFEST_BASENAME = "feature_manifest.json"
 
-PHASE3_SPLITS_BASENAME = "splits_2024.json"
+PHASE3_SPLITS_BASENAME = "splits_all.json"
 PHASE3_MANIFEST_BASENAME = "splits_manifest.json"
 
 # Order is stable so the manifest's source_sha256 maps come out the same shape.
@@ -39,11 +39,11 @@ class Phase2OutputMismatchError(ValueError):
 
 
 class Phase3OutputMismatchError(ValueError):
-    """Raised when splits_2024.json diverges from splits_manifest.json (TR-IN-06)."""
+    """Raised when splits_all.json diverges from splits_manifest.json (TR-IN-06)."""
 
 
 class StrategyUnavailableError(ValueError):
-    """Raised when training_config.yaml requests a strategy not present in splits_2024.json (TR-IN-08)."""
+    """Raised when training_config.yaml requests a strategy not present in splits_all.json (TR-IN-08)."""
 
 
 def _load_json(path: pathlib.Path) -> dict[str, Any]:
@@ -94,7 +94,7 @@ def verify_phase2_outputs(processed_dir: pathlib.Path) -> dict[str, Any]:
 
 
 def verify_phase3_outputs(processed_dir: pathlib.Path) -> dict[str, Any]:
-    """Verify ``splits_2024.json`` against ``splits_manifest.json`` (TR-IN-06).
+    """Verify ``splits_all.json`` against ``splits_manifest.json`` (TR-IN-06).
 
     Returns the parsed Phase 3 manifest so downstream code can copy provenance.
     """
@@ -134,7 +134,7 @@ def verify_phase3_outputs(processed_dir: pathlib.Path) -> dict[str, Any]:
 
 
 def load_splits_artifact(processed_dir: pathlib.Path) -> dict[str, Any]:
-    """Load the on-disk splits_2024.json (after verification by ``verify_phase3_outputs``)."""
+    """Load the on-disk splits_all.json (after verification by ``verify_phase3_outputs``)."""
     return _load_json(processed_dir / PHASE3_SPLITS_BASENAME)
 
 
@@ -147,7 +147,7 @@ def verify_strategy_availability(
     missing = [s for s in requested if s not in splits]
     if missing:
         raise StrategyUnavailableError(
-            f"training_config requests strategies {requested} but splits_2024.json "
+            f"training_config requests strategies {requested} but splits_all.json "
             f"only contains {sorted(k for k in splits.keys() if k != 'splits_version')}; "
             f"missing: {missing}"
         )

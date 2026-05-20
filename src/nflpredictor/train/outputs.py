@@ -29,14 +29,14 @@ RUNG_FILE_PREFIX: dict[str, str] = {
 
 
 def combination_filename(rung: str, shape: str, strategy: str) -> str:
-    """Build the canonical ``<rung_id>__<shape>__<strategy_lower>.parquet`` name (TR-OUT-01)."""
+    """Build the canonical ``<rung_id>__<shape>__<strategy>.parquet`` name (TR-OUT-01)."""
     if rung not in RUNG_FILE_PREFIX:
         raise ValueError(f"unknown rung {rung!r}; expected one of {sorted(RUNG_FILE_PREFIX)}")
     if shape not in {"none", "flat", "pos"}:
         raise ValueError(f"unknown shape {shape!r}")
-    if strategy not in {"S1", "S3"}:
+    if strategy not in {"season_holdout", "loso_cv"}:
         raise ValueError(f"unknown strategy {strategy!r}")
-    return f"{RUNG_FILE_PREFIX[rung]}__{shape}__{strategy.lower()}.parquet"
+    return f"{RUNG_FILE_PREFIX[rung]}__{shape}__{strategy}.parquet"
 
 
 def ensure_predictions_dir(processed_dir: pathlib.Path) -> pathlib.Path:
@@ -55,8 +55,8 @@ def _write_parquet(table: pa.Table, path: pathlib.Path) -> None:
     )
 
 
-def write_s1_predictions(df: pd.DataFrame, path: pathlib.Path) -> None:
-    """Write an S1 combination parquet (TR-OUT-02).
+def write_holdout_predictions(df: pd.DataFrame, path: pathlib.Path) -> None:
+    """Write a season_holdout combination parquet (TR-OUT-02).
 
     Input ``df`` must have columns ``slice`` (``"val"`` / ``"test"``),
     ``GameId``, ``pred_home``, ``pred_away``. Rows are sorted by
@@ -65,13 +65,18 @@ def write_s1_predictions(df: pd.DataFrame, path: pathlib.Path) -> None:
     required = {"slice", "GameId", "pred_home", "pred_away"}
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"S1 predictions frame is missing required columns: {sorted(missing)}")
+        raise ValueError(
+            f"season_holdout predictions frame is missing required columns: "
+            f"{sorted(missing)}"
+        )
 
     # Stable, explicit slice ordering: val < test.
     slice_rank = df["slice"].map({"val": 0, "test": 1})
     if slice_rank.isna().any():
         bad = sorted(set(df["slice"].tolist()) - {"val", "test"})
-        raise ValueError(f"S1 predictions frame has unknown slice values: {bad}")
+        raise ValueError(
+            f"season_holdout predictions frame has unknown slice values: {bad}"
+        )
     ordered = (
         df.assign(_rank=slice_rank.astype("int8"))
         .sort_values(["_rank", "GameId"], kind="mergesort")
@@ -125,8 +130,8 @@ def write_loss_curves(df: pd.DataFrame, path: pathlib.Path) -> None:
     _write_parquet(table, path)
 
 
-def write_s3_predictions(df: pd.DataFrame, path: pathlib.Path) -> None:
-    """Write an S3 combination parquet (TR-OUT-03).
+def write_cv_predictions(df: pd.DataFrame, path: pathlib.Path) -> None:
+    """Write a loso_cv combination parquet (TR-OUT-03).
 
     Input ``df`` must have columns ``fold_index`` (int), ``GameId``,
     ``pred_home``, ``pred_away``. Rows are sorted by ``(fold_index, GameId)``.
@@ -134,7 +139,9 @@ def write_s3_predictions(df: pd.DataFrame, path: pathlib.Path) -> None:
     required = {"fold_index", "GameId", "pred_home", "pred_away"}
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"S3 predictions frame is missing required columns: {sorted(missing)}")
+        raise ValueError(
+            f"loso_cv predictions frame is missing required columns: {sorted(missing)}"
+        )
 
     ordered = (
         df.sort_values(["fold_index", "GameId"], kind="mergesort").reset_index(drop=True)

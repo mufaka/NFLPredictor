@@ -1,4 +1,4 @@
-training_version: v3
+training_version: v4
 seed: 1729
 device: cpu
 one_hot_threshold: 8
@@ -11,8 +11,7 @@ shapes:
 - flat
 - pos
 strategies:
-- S1
-- S3
+- season_holdout
 linear:
   lr: 0.001
   batch_size: 32
@@ -27,7 +26,7 @@ mlp:
   activation: gelu
   dropout: 0.1
 embedding_dims:
-  Archetype: 16
+  archetype: 16
   team_codes: 8
   coaches: 8
   officials: 8

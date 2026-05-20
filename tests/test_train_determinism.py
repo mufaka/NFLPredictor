@@ -68,7 +68,8 @@ def test_two_runs_produce_byte_identical_outputs(tmp_path: pathlib.Path) -> None
     a_preds = sorted((run_a / PREDICTIONS_DIRNAME).glob("*.parquet"))
     b_preds = sorted((run_b / PREDICTIONS_DIRNAME).glob("*.parquet"))
     assert [p.name for p in a_preds] == [p.name for p in b_preds]
-    assert len(a_preds) == 12
+    # Default config trains season_holdout only → 6 prediction parquets.
+    assert len(a_preds) == 6
 
     for pa, pb in zip(a_preds, b_preds):
         assert pa.read_bytes() == pb.read_bytes(), (

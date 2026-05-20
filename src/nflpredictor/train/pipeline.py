@@ -26,8 +26,8 @@ from .encoders import (
 )
 from .manifest import (
     build_training_manifest,
-    build_training_summary_s1,
-    build_training_summary_s3,
+    build_training_summary_holdout,
+    build_training_summary_cv,
     write_training_manifest,
 )
 from .outputs import (
@@ -37,15 +37,15 @@ from .outputs import (
     combination_filename,
     ensure_predictions_dir,
     write_loss_curves,
-    write_s1_predictions,
-    write_s3_predictions,
+    write_holdout_predictions,
+    write_cv_predictions,
 )
 from .predict import (
     LearnedComboResult,
-    run_learned_combo_s1,
-    run_learned_combo_s3,
-    run_trivial_combo_s1,
-    run_trivial_combo_s3,
+    run_learned_combo_holdout,
+    run_learned_combo_cv,
+    run_trivial_combo_holdout,
+    run_trivial_combo_cv,
 )
 from .sources import (
     PHASE2_FEATURES_FLAT_BASENAME,
@@ -86,7 +86,7 @@ class Combination:
 
     rung: str
     shape: str       # "none" for trivial rungs; "flat" | "pos" for learned rungs
-    strategy: str    # "S1" or "S3"
+    strategy: str    # "season_holdout" or "loso_cv"
 
     @property
     def is_trivial(self) -> bool:
@@ -147,7 +147,7 @@ def _val_mae_from_predictions(
 
     ``labels_lookup`` maps GameId → (home_score, away_score). When
     ``slice_filter`` is set, only rows whose ``slice`` column matches are
-    considered (used for S1 val MAE).
+    considered (used for season_holdout val MAE).
     """
     df = predictions
     if slice_filter is not None:
@@ -184,12 +184,12 @@ def _collect_loss_curve_rows(
 ) -> list[dict[str, Any]]:
     """Flatten a learned combination's loss-curve records into parquet rows (DD-LC-01).
 
-    For S1 the single fold uses ``fold = 0``. For S3 each fold is tagged with
-    its expanding-window ``k`` value (6..14) drawn from the splits artifact,
-    matching Spec-Phase6 §4.1.
+    For season_holdout the single fold uses ``fold = 0``. For loso_cv each
+    fold is tagged with its held-out ``val_season`` drawn from the splits
+    artifact.
     """
     rows: list[dict[str, Any]] = []
-    if combo.strategy == "S1":
+    if combo.strategy == "season_holdout":
         train_result = result.train_results[0]
         for record in train_result.loss_curve:
             rows.append({
@@ -202,15 +202,15 @@ def _collect_loss_curve_rows(
             })
         return rows
 
-    # S3 — train_results[i] aligns positionally with splits["S3"]["folds"][i].
-    folds = splits["S3"]["folds"]
+    # loso_cv — train_results[i] aligns positionally with splits["loso_cv"]["folds"][i].
+    folds = splits["loso_cv"]["folds"]
     if len(result.train_results) != len(folds):
         raise RuntimeError(
-            f"S3 train_results count ({len(result.train_results)}) does not "
-            f"match S3 fold count ({len(folds)}) for combo {combo.manifest_key!r}"
+            f"loso_cv train_results count ({len(result.train_results)}) does not "
+            f"match loso_cv fold count ({len(folds)}) for combo {combo.manifest_key!r}"
         )
     for fold_entry, train_result in zip(folds, result.train_results):
-        k_value = int(fold_entry["k"])
+        k_value = int(fold_entry["val_season"])
         for record in train_result.loss_curve:
             rows.append({
                 "combination_id": combo.manifest_key,
@@ -243,29 +243,29 @@ def _run_one_combo(
     labels_lookup = _build_labels_lookup(feature_df)
 
     if combo.is_trivial:
-        if combo.strategy == "S1":
-            preds = run_trivial_combo_s1(combo.rung, feature_df, splits)
+        if combo.strategy == "season_holdout":
+            preds = run_trivial_combo_holdout(combo.rung, feature_df, splits)
             val_mae = _val_mae_from_predictions(preds, labels_lookup, slice_filter="val")
-            summary = build_training_summary_s1(None, val_mae)
+            summary = build_training_summary_holdout(None, val_mae)
             return preds, summary, []
         else:
-            preds = run_trivial_combo_s3(combo.rung, feature_df, splits)
+            preds = run_trivial_combo_cv(combo.rung, feature_df, splits)
             # Per-fold val MAE in the fold's order.
             per_fold_mae: list[float] = []
-            for fold in splits["S3"]["folds"]:
+            for fold in splits["loso_cv"]["folds"]:
                 fold_idx = int(fold["fold_index"])
                 sub = preds[preds["fold_index"] == fold_idx]
                 per_fold_mae.append(_val_mae_from_predictions(sub, labels_lookup))
             per_fold_results: list[Any] = [None] * len(per_fold_mae)
-            summary = build_training_summary_s3(per_fold_results, per_fold_mae)
+            summary = build_training_summary_cv(per_fold_results, per_fold_mae)
             return preds, summary, []
 
     # Learned rung
     classification = classifications_by_shape[combo.shape]
     encoder_factory = encoders_factory_by_shape[combo.shape]
 
-    if combo.strategy == "S1":
-        result: LearnedComboResult = run_learned_combo_s1(
+    if combo.strategy == "season_holdout":
+        result: LearnedComboResult = run_learned_combo_holdout(
             combo.rung,
             feature_df,
             splits,
@@ -278,12 +278,12 @@ def _run_one_combo(
             labels_lookup=labels_lookup,
         )
         val_mae = _val_mae_from_predictions(result.predictions, labels_lookup, slice_filter="val")
-        summary = build_training_summary_s1(result.train_results[0], val_mae)
+        summary = build_training_summary_holdout(result.train_results[0], val_mae)
         loss_rows = _collect_loss_curve_rows(combo, result, splits)
         return result.predictions, summary, loss_rows
 
-    # S3
-    result_s3: LearnedComboResult = run_learned_combo_s3(
+    # loso_cv
+    result_cv: LearnedComboResult = run_learned_combo_cv(
         combo.rung,
         feature_df,
         splits,
@@ -296,13 +296,13 @@ def _run_one_combo(
         labels_lookup=labels_lookup,
     )
     per_fold_mae = []
-    for fold in splits["S3"]["folds"]:
+    for fold in splits["loso_cv"]["folds"]:
         fold_idx = int(fold["fold_index"])
-        sub = result_s3.predictions[result_s3.predictions["fold_index"] == fold_idx]
+        sub = result_cv.predictions[result_cv.predictions["fold_index"] == fold_idx]
         per_fold_mae.append(_val_mae_from_predictions(sub, labels_lookup))
-    summary = build_training_summary_s3(list(result_s3.train_results), per_fold_mae)
-    loss_rows = _collect_loss_curve_rows(combo, result_s3, splits)
-    return result_s3.predictions, summary, loss_rows
+    summary = build_training_summary_cv(list(result_cv.train_results), per_fold_mae)
+    loss_rows = _collect_loss_curve_rows(combo, result_cv, splits)
+    return result_cv.predictions, summary, loss_rows
 
 
 def run_training_build(
@@ -391,10 +391,10 @@ def run_training_build(
         # 9. Write the parquet for this combination.
         filename = combination_filename(combo.rung, combo.shape, combo.strategy)
         out_path = out_dir / filename
-        if combo.strategy == "S1":
-            write_s1_predictions(predictions, out_path)
+        if combo.strategy == "season_holdout":
+            write_holdout_predictions(predictions, out_path)
         else:
-            write_s3_predictions(predictions, out_path)
+            write_cv_predictions(predictions, out_path)
 
         training_summaries[combo.manifest_key] = summary
         loss_curve_rows.extend(combo_loss_rows)
@@ -448,17 +448,17 @@ def run_training_build(
 def _format_combo_log_line(combo: Combination, summary: dict[str, Any]) -> str:
     """One-line per-combination summary for stdout (TR-NF-07)."""
     base = f"  {combo.manifest_key:<40s}"
-    if "fold_count" in summary:  # S3
+    if "fold_count" in summary:  # loso_cv
         return (
-            f"{base}  S3 folds={summary['fold_count']}  "
+            f"{base}  loso_cv folds={summary['fold_count']}  "
             f"mean_val_mae={summary['mean_val_mae']:.4f}"
         )
-    # S1
+    # season_holdout
     epochs = summary.get("epochs_trained")
     if epochs is None:
-        return f"{base}  S1 val_mae={summary['val_mae']:.4f}  (trivial)"
+        return f"{base}  holdout val_mae={summary['val_mae']:.4f}  (trivial)"
     return (
-        f"{base}  S1 val_mae={summary['val_mae']:.4f}  "
+        f"{base}  holdout val_mae={summary['val_mae']:.4f}  "
         f"epochs={epochs} best={summary['best_epoch']} "
         f"early={summary['stopped_early']}"
     )

@@ -5,8 +5,8 @@ from __future__ import annotations
 import pandas as pd
 
 from nflpredictor.train.predict import (
-    run_trivial_combo_s1,
-    run_trivial_combo_s3,
+    run_trivial_combo_holdout,
+    run_trivial_combo_cv,
 )
 from nflpredictor.train.trivial import (
     AWAY_LABEL,
@@ -116,37 +116,37 @@ def _full_fixture() -> tuple[pd.DataFrame, dict]:
     })
     splits = {
         "splits_version": "vTest",
-        "S1": {
+        "season_holdout": {
             "train": ["G1", "G2", "G3", "G4"],
             "val":   ["G5"],
             "test":  ["G6"],
         },
-        "S3": {
+        "loso_cv": {
             "test": ["G6"],
             "folds": [
-                {"fold_index": 0, "k": 2, "train": ["G1", "G2"], "val": ["G3"]},
-                {"fold_index": 1, "k": 3, "train": ["G1", "G2", "G3"], "val": ["G4"]},
-                {"fold_index": 2, "k": 4, "train": ["G1", "G2", "G3", "G4"], "val": ["G5"]},
+                {"fold_index": 0, "val_season": 2020, "train": ["G1", "G2"], "val": ["G3"]},
+                {"fold_index": 1, "val_season": 2021, "train": ["G1", "G2", "G3"], "val": ["G4"]},
+                {"fold_index": 2, "val_season": 2022, "train": ["G1", "G2", "G3", "G4"], "val": ["G5"]},
             ],
         },
     }
     return df, splits
 
 
-def test_run_trivial_combo_s1_covers_val_and_test_slices() -> None:
+def test_run_trivial_combo_holdout_covers_val_and_test_slices() -> None:
     df, splits = _full_fixture()
-    out = run_trivial_combo_s1("mean", df, splits)
+    out = run_trivial_combo_holdout("mean", df, splits)
     assert list(out.columns) == ["slice", "GameId", "pred_home", "pred_away"]
     assert sorted(out["slice"].unique().tolist()) == ["test", "val"]
     val_ids = out[out["slice"] == "val"]["GameId"].tolist()
     test_ids = out[out["slice"] == "test"]["GameId"].tolist()
-    assert val_ids == splits["S1"]["val"]
-    assert test_ids == splits["S1"]["test"]
+    assert val_ids == splits["season_holdout"]["val"]
+    assert test_ids == splits["season_holdout"]["test"]
 
 
-def test_run_trivial_combo_s3_one_row_per_fold_val_game() -> None:
+def test_run_trivial_combo_cv_one_row_per_fold_val_game() -> None:
     df, splits = _full_fixture()
-    out = run_trivial_combo_s3("team_mean", df, splits)
+    out = run_trivial_combo_cv("team_mean", df, splits)
     assert list(out.columns) == ["fold_index", "GameId", "pred_home", "pred_away"]
     # 3 folds × 1 val game each = 3 rows.
     assert len(out) == 3
@@ -154,11 +154,11 @@ def test_run_trivial_combo_s3_one_row_per_fold_val_game() -> None:
     assert out["GameId"].tolist() == ["G3", "G4", "G5"]
 
 
-def test_run_trivial_combo_s1_uses_train_only_for_means() -> None:
-    """rung 0 mean predictions equal the S1.train mean, not the full-frame mean."""
+def test_run_trivial_combo_holdout_uses_train_only_for_means() -> None:
+    """rung 0 mean predictions equal the holdout train mean, not the full-frame mean."""
     df, splits = _full_fixture()
-    out = run_trivial_combo_s1("mean", df, splits)
-    train_df = df[df["GameId"].isin(splits["S1"]["train"])]
+    out = run_trivial_combo_holdout("mean", df, splits)
+    train_df = df[df["GameId"].isin(splits["season_holdout"]["train"])]
     expected_home = train_df[HOME_LABEL].mean()
     expected_away = train_df[AWAY_LABEL].mean()
     assert all(abs(p - expected_home) < 1e-12 for p in out["pred_home"])
@@ -168,9 +168,9 @@ def test_run_trivial_combo_s1_uses_train_only_for_means() -> None:
 def test_run_trivial_combos_are_byte_idempotent() -> None:
     """TR-RUNG-05: closed-form rungs produce byte-identical output across runs."""
     df, splits = _full_fixture()
-    s1_a = run_trivial_combo_s1("team_mean", df, splits)
-    s1_b = run_trivial_combo_s1("team_mean", df, splits)
-    s3_a = run_trivial_combo_s3("mean", df, splits)
-    s3_b = run_trivial_combo_s3("mean", df, splits)
-    pd.testing.assert_frame_equal(s1_a, s1_b)
-    pd.testing.assert_frame_equal(s3_a, s3_b)
+    h_a = run_trivial_combo_holdout("team_mean", df, splits)
+    h_b = run_trivial_combo_holdout("team_mean", df, splits)
+    c_a = run_trivial_combo_cv("mean", df, splits)
+    c_b = run_trivial_combo_cv("mean", df, splits)
+    pd.testing.assert_frame_equal(h_a, h_b)
+    pd.testing.assert_frame_equal(c_a, c_b)

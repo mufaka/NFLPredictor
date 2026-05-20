@@ -15,8 +15,8 @@ from nflpredictor.train.config import (
 )
 from nflpredictor.train.manifest import (
     build_training_manifest,
-    build_training_summary_s1,
-    build_training_summary_s3,
+    build_training_summary_holdout,
+    build_training_summary_cv,
     write_training_manifest,
 )
 from nflpredictor.train.train_loop import ResolvedDevice, TrainingResult
@@ -48,11 +48,11 @@ def _config() -> TrainingConfig:
         one_hot_threshold=8,
         rungs=("mean",),
         shapes=("flat",),
-        strategies=("S1",),
+        strategies=("season_holdout",),
         linear=LinearHyperparams(lr=0.001, batch_size=32, max_epochs=10, early_stop_patience=3),
         mlp=MlpHyperparams(lr=0.001, batch_size=32, max_epochs=10, early_stop_patience=3,
                            hidden_dim=8, activation="gelu", dropout=0.1),
-        embedding_dims={"Archetype": 16},
+        embedding_dims={"archetype": 16},
     )
 
 
@@ -70,7 +70,7 @@ def _learned_result() -> TrainingResult:
 
 
 def test_summary_s1_for_trivial_rung() -> None:
-    s = build_training_summary_s1(None, val_mae=7.99)
+    s = build_training_summary_holdout(None, val_mae=7.99)
     assert s == {
         "val_mae": 7.99,
         "epochs_trained": None,
@@ -80,7 +80,7 @@ def test_summary_s1_for_trivial_rung() -> None:
 
 
 def test_summary_s1_for_learned_rung() -> None:
-    s = build_training_summary_s1(_learned_result(), val_mae=8.30)
+    s = build_training_summary_holdout(_learned_result(), val_mae=8.30)
     assert s["val_mae"] == 8.30
     assert s["epochs_trained"] == 62
     assert s["best_epoch"] == 42
@@ -90,7 +90,7 @@ def test_summary_s1_for_learned_rung() -> None:
 def test_summary_s3_shape_and_mean() -> None:
     results: list = [_learned_result(), _learned_result(), None]
     maes = [9.0, 8.0, 7.5]
-    s = build_training_summary_s3(results, maes)
+    s = build_training_summary_cv(results, maes)
     assert s["fold_count"] == 3
     assert s["mean_val_mae"] == pytest.approx((9.0 + 8.0 + 7.5) / 3)
     assert [f["fold_index"] for f in s["per_fold"]] == [0, 1, 2]
@@ -99,7 +99,7 @@ def test_summary_s3_shape_and_mean() -> None:
 
 
 def test_summary_s3_empty_when_no_folds() -> None:
-    s = build_training_summary_s3([], [])
+    s = build_training_summary_cv([], [])
     assert s["fold_count"] == 0
     assert s["per_fold"] == []
 
@@ -113,13 +113,13 @@ def test_build_training_manifest_has_all_required_keys() -> None:
         config=_config(),
         resolved_device=_resolved_cpu(),
         torch_version="2.12.0+cpu",
-        phase2_source_sha256={"Data/processed/features_flat_2024.parquet": "aaa"},
-        phase3_source_sha256={"Data/processed/splits_2024.json": "bbb"},
-        output_sha256={"predictions/rung0_mean__none__s1.parquet": "ccc"},
+        phase2_source_sha256={"Data/processed/features_flat_all.parquet": "aaa"},
+        phase3_source_sha256={"Data/processed/splits_all.json": "bbb"},
+        output_sha256={"predictions/rung0_mean__none__season_holdout.parquet": "ccc"},
         training_config_sha256="ddd",
         phase2_manifest_git_commit="commit-phase2",
         phase3_manifest_git_commit="commit-phase3",
-        training_summaries={"rung0_mean__none__s1": build_training_summary_s1(None, 7.9)},
+        training_summaries={"rung0_mean__none__season_holdout": build_training_summary_holdout(None, 7.9)},
         repo_dir=pathlib.Path(__file__).parent,  # any real dir; git_commit may resolve or be None
     )
     required_keys = {
@@ -166,10 +166,10 @@ def test_cuda_resolved_records_cuda_fields() -> None:
 
 
 def test_no_test_mae_key_anywhere_in_summaries() -> None:
-    """TR-TEST-10: enforce TR-MAN-03 across both S1 and S3 summary shapes."""
-    s1 = build_training_summary_s1(_learned_result(), val_mae=8.3)
-    s3 = build_training_summary_s3([_learned_result(), None], [9.0, 7.0])
-    summaries = {"x_s1": s1, "x_s3": s3}
+    """TR-TEST-10: enforce TR-MAN-03 across both season_holdout and loso_cv summary shapes."""
+    s1 = build_training_summary_holdout(_learned_result(), val_mae=8.3)
+    s3 = build_training_summary_cv([_learned_result(), None], [9.0, 7.0])
+    summaries = {"x_holdout": s1, "x_cv": s3}
     m = build_training_manifest(
         config=_config(),
         resolved_device=_resolved_cpu(),

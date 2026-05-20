@@ -25,8 +25,8 @@ def utc_timestamp(now: Optional[_dt.datetime] = None) -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def build_training_summary_s1(result: Optional[TrainingResult], val_mae: float) -> dict[str, Any]:
-    """Per-combination S1 summary block (TR-MAN-02).
+def build_training_summary_holdout(result: Optional[TrainingResult], val_mae: float) -> dict[str, Any]:
+    """Per-combination season_holdout summary block (TR-MAN-02).
 
     ``result`` is ``None`` for trivial rungs — the three epoch fields then
     collapse to ``null`` per TR-MAN-02. ``val_mae`` is always recorded.
@@ -46,11 +46,11 @@ def build_training_summary_s1(result: Optional[TrainingResult], val_mae: float) 
     }
 
 
-def build_training_summary_s3(
+def build_training_summary_cv(
     per_fold_results: list[Optional[TrainingResult]],
     per_fold_val_mae: list[float],
 ) -> dict[str, Any]:
-    """Per-combination S3 summary block (TR-MAN-02)."""
+    """Per-combination loso_cv summary block (TR-MAN-02)."""
     fold_count = len(per_fold_val_mae)
     mean_val_mae = float(statistics.fmean(per_fold_val_mae)) if per_fold_val_mae else 0.0
     per_fold: list[dict[str, Any]] = []

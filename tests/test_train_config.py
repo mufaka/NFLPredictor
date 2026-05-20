@@ -19,7 +19,7 @@ DEFAULT_CONFIG_PATH = REPO_ROOT / "Data" / "raw" / "training_config.yaml"
 # Mirrors the high-cardinality vocab keys from Data/processed/feature_vocab.json.
 # Keeping this static keeps the test independent of Phase 2 outputs.
 _HIGH_CARD_KEYS: frozenset[str] = frozenset({
-    "Archetype", "coaches", "officials", "positions", "stadium", "team_codes",
+    "archetype", "coaches", "officials", "positions", "stadium", "team_codes",
 })
 
 # Synthetic vocab: each high-card key has 9 entries (> default threshold of 8),
@@ -58,7 +58,7 @@ def test_default_v1_config_accepts() -> None:
     assert cfg.device == "auto"
     assert cfg.rungs == ("mean", "team_mean", "linear", "mlp")
     assert cfg.shapes == ("flat", "pos")
-    assert cfg.strategies == ("S1", "S3")
+    assert cfg.strategies == ("season_holdout",)
     assert cfg.linear.lr == 0.001
     assert cfg.mlp.activation == "gelu"
     assert set(cfg.embedding_dims.keys()) >= HIGH_CARD_KEYS
@@ -86,7 +86,7 @@ def test_empty_rungs_rejected(tmp_path: pathlib.Path) -> None:
     [
         ("rungs", ["mean", "mean", "linear"]),
         ("shapes", ["flat", "flat"]),
-        ("strategies", ["S1", "S1"]),
+        ("strategies", ["season_holdout", "season_holdout"]),
     ],
 )
 def test_duplicate_in_list_rejected(
@@ -109,7 +109,7 @@ def test_bad_rungs_entry_rejected(tmp_path: pathlib.Path) -> None:
 # (f) missing embedding_dims for a high-card categorical
 def test_missing_embedding_dim_rejected(tmp_path: pathlib.Path) -> None:
     data = _baseline()
-    data["embedding_dims"].pop("Archetype")
+    data["embedding_dims"].pop("archetype")
     with pytest.raises(
         TrainingConfigError,
         match="embedding_dims is missing required high-cardinality vocab keys",

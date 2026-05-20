@@ -1,80 +1,30 @@
 {
-  "build_timestamp_utc": "2026-05-19T13:38:49Z",
-  "git_commit": "1b2617cb62856e171d72b07c005aa1cf357e73fe",
+  "build_timestamp_utc": "2026-05-20T16:05:57Z",
+  "git_commit": "0b155b87e70b6d8205baee5894be7477c0796925",
   "output_sha256": {
-    "Data/processed/splits_2024.json": "92817291b01c5bcbb15b10feafe5c6fbdc5762f6bdbec36dcb3bb8a3fdef66ee"
+    "Data/processed/splits_all.json": "019108b9e64f0536a50a9b31c1464be5468c2fa9775c31dc7d3fa620eb4735e4"
   },
   "phase2_manifest_git_commit": "fixture-phase2",
   "phase2_source_sha256": {
-    "Data/processed/features_flat_2024.parquet": "747983ddb249a56c3281bc2ad0540e38e6c637d8087f0e65addcdf210a0bd8ff"
+    "Data/processed/features_flat_all.parquet": "a2fee27ece9205e52682ef57a9d3e74519890395f1225292e5a2953cbce90e3d"
   },
-  "splits_config_sha256": "d82425bb4bca8b3195d06b3ba4de7a844c01e8dd32c4843801e8a040f01d07e9",
-  "splits_version": "v1",
+  "season_assignment": {
+    "test_season": 2025,
+    "train_seasons": [
+      2020,
+      2021,
+      2022,
+      2023
+    ],
+    "val_season": 2024
+  },
+  "splits_config_sha256": "68c49d2609fbf6e06747a8dd4226c4f83ddbfe4ad53cfddb7a3f85919c1e7d83",
+  "splits_version": "v2",
   "strategy_summaries": {
-    "S1": {
-      "test_n": 6,
-      "train_n": 24,
-      "val_n": 6
-    },
-    "S3": {
-      "fold_count": 9,
-      "folds": [
-        {
-          "fold_index": 0,
-          "k": 6,
-          "train_n": 12,
-          "val_n": 2
-        },
-        {
-          "fold_index": 1,
-          "k": 7,
-          "train_n": 14,
-          "val_n": 2
-        },
-        {
-          "fold_index": 2,
-          "k": 8,
-          "train_n": 16,
-          "val_n": 2
-        },
-        {
-          "fold_index": 3,
-          "k": 9,
-          "train_n": 18,
-          "val_n": 2
-        },
-        {
-          "fold_index": 4,
-          "k": 10,
-          "train_n": 20,
-          "val_n": 2
-        },
-        {
-          "fold_index": 5,
-          "k": 11,
-          "train_n": 22,
-          "val_n": 2
-        },
-        {
-          "fold_index": 6,
-          "k": 12,
-          "train_n": 24,
-          "val_n": 2
-        },
-        {
-          "fold_index": 7,
-          "k": 13,
-          "train_n": 26,
-          "val_n": 2
-        },
-        {
-          "fold_index": 8,
-          "k": 14,
-          "train_n": 28,
-          "val_n": 2
-        }
-      ],
-      "test_n": 6
+    "season_holdout": {
+      "test_n": 4,
+      "train_n": 16,
+      "val_n": 4
     }
   }
 }
