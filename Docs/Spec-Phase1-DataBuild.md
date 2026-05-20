@@ -101,6 +101,7 @@ The build is expected to be executable from the repository root via a single com
 | DB-IN-04 | The build shall reject (fail-fast with a clear error) any raw input whose header row does not match the expected schema declared in this specification. All six box-score files share one header schema; all six Madden files share one header schema. |
 | DB-IN-05 | The build shall tolerate both Unix (`LF`) and Windows (`CRLF`) line endings in the raw box-score files — `box_scores_2024.csv` uses `CRLF` while the other five use `LF` — normalizing to `LF` on read. The raw Madden files carry no header whitespace and require no whitespace stripping. |
 | DB-IN-06 | The raw Madden files contain a source `madden_id` column (a non-unique, non-PFR string). The build shall drop this column on read; it is neither preserved in any output nor used as an identifier. The build assigns its own `madden_id` per §3.3. |
+| DB-IN-07 | Every game in `box_scores_<YYYY>.csv` shall belong to season `YYYY` (a `GameId` begins with `YYYYMMDD`; an NFL season runs September `YYYY` into February `YYYY+1`). The build shall fail fast if a season's box-score file contains a game from another season — this guards against cross-season row contamination of the raw files. |
 
 ### 3.2 Normalization
 

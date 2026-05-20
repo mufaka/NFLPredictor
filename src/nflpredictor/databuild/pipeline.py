@@ -374,6 +374,36 @@ def _sum_counts(by_season: dict[str, dict[str, int]]) -> dict[str, int]:
     return dict(total)
 
 
+def _season_of_game_id(game_id: str) -> int:
+    """Return the NFL season a ``GameId`` belongs to.
+
+    A ``GameId`` begins with ``YYYYMMDD``. An NFL season ``S`` runs from
+    September ``S`` into February ``S+1``, so a game in month >= 8 belongs to
+    season = its calendar year, otherwise to season = year - 1.
+    """
+    year = int(game_id[:4])
+    month = int(game_id[4:6])
+    return year if month >= 8 else year - 1
+
+
+def _assert_box_scores_season(box_scores_df: pd.DataFrame, season: int) -> None:
+    """Fail fast if a season's box-score file contains a game from another season.
+
+    Guards against cross-season contamination of the raw files (DB-IN-07).
+    """
+    offenders = [
+        gid for gid in box_scores_df["GameId"]
+        if _season_of_game_id(str(gid)) != season
+    ]
+    if offenders:
+        raise ValueError(
+            f"box_scores_{season}.csv contains {len(offenders)} game(s) from "
+            f"another season: {sorted(set(offenders))[:5]}"
+            + (" ..." if len(set(offenders)) > 5 else "")
+            + " — cross-season rows are not allowed (DB-IN-07)"
+        )
+
+
 def _build_one_season(
     season: int,
     box_scores_df: pd.DataFrame,
@@ -381,6 +411,7 @@ def _build_one_season(
     season_overrides: list,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[MappingRecord], dict[str, int]]:
     """Run the full match/append/null-fill pipeline for a single season."""
+    _assert_box_scores_season(box_scores_df, season)
     raw_madden_count = len(raw_madden_df)
 
     madden_with_ids = assign_raw_madden_ids(raw_madden_df, season)

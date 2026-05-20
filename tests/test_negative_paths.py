@@ -28,3 +28,22 @@ def test_override_referencing_unknown_madden_id_fails(tmp_path: pathlib.Path):
     out = tmp_path / "out"
     with pytest.raises(ValueError, match="DB-OVR-04"):
         run_build(raw_copy, out)
+
+
+def test_cross_season_box_score_row_fails(tmp_path: pathlib.Path):
+    """DB-IN-07: a box_scores_<YYYY>.csv with a game from another season raises.
+
+    The fixture's 2024 game files are presented as a 2099 season, so every
+    game belongs to the wrong season and the guard must fire.
+    """
+    raw_copy = tmp_path / "raw"
+    raw_copy.mkdir()
+    shutil.copy(RAW_TINY / "box_scores_2024.csv", raw_copy / "box_scores_2099.csv")
+    shutil.copy(RAW_TINY / "madden_2024.csv", raw_copy / "madden_2099.csv")
+    (raw_copy / "player_overrides.csv").write_text(
+        "season,box_score_name,box_score_team_code,box_score_id,madden_id,reason\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="DB-IN-07"):
+        run_build(raw_copy, out)
